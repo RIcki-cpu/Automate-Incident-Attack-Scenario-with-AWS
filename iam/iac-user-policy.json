@@ -1,0 +1,109 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NetworkAndCompute",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:ModifyVpcAttribute",
+        "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:ModifySubnetAttribute",
+        "ec2:CreateInternetGateway", "ec2:DeleteInternetGateway",
+        "ec2:AttachInternetGateway", "ec2:DetachInternetGateway",
+        "ec2:CreateRouteTable", "ec2:DeleteRouteTable",
+        "ec2:CreateRoute", "ec2:DeleteRoute",
+        "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable",
+        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroup*", "ec2:RevokeSecurityGroup*",
+        "ec2:RunInstances", "ec2:TerminateInstances",
+        "ec2:StartInstances", "ec2:StopInstances",
+        "ec2:ModifyInstanceAttribute",
+        "ec2:CreateTags", "ec2:DeleteTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScenarioBucketsOnly",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::s3-exfil-*", "arn:aws:s3:::s3-exfil-*/*",
+        "arn:aws:s3:::iam-privesc-*", "arn:aws:s3:::iam-privesc-*/*",
+        "arn:aws:s3:::lateral-move-*", "arn:aws:s3:::lateral-move-*/*"
+      ]
+    },
+    {
+      "Sid": "AccountLevelReadForPreflightChecks",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetAccountPublicAccessBlock",
+        "budgets:ViewBudget",
+        "cloudtrail:DescribeTrails",
+        "cloudtrail:ListTrails",
+        "athena:*",
+        "glue:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScenarioTrails",
+      "Effect": "Allow",
+      "Action": [
+        "cloudtrail:CreateTrail", "cloudtrail:DeleteTrail", "cloudtrail:UpdateTrail",
+        "cloudtrail:StartLogging", "cloudtrail:StopLogging",
+        "cloudtrail:PutEventSelectors", "cloudtrail:GetEventSelectors",
+        "cloudtrail:GetTrail", "cloudtrail:GetTrailStatus",
+        "cloudtrail:AddTags", "cloudtrail:RemoveTags", "cloudtrail:ListTags",
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ScenarioRolesOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole",
+        "iam:TagRole", "iam:UntagRole", "iam:ListRoleTags",
+        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy",
+        "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
+        "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile",
+        "iam:GetInstanceProfile", "iam:TagInstanceProfile",
+        "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
+        "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::500926551923:role/s3-exfil-*",
+        "arn:aws:iam::500926551923:role/iam-privesc-*",
+        "arn:aws:iam::500926551923:role/lateral-move-*",
+        "arn:aws:iam::500926551923:instance-profile/s3-exfil-*",
+        "arn:aws:iam::500926551923:instance-profile/iam-privesc-*",
+        "arn:aws:iam::500926551923:instance-profile/lateral-move-*"
+      ]
+    },
+    {
+      "Sid": "PassScenarioRolesToEc2Only",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::500926551923:role/s3-exfil-*",
+        "arn:aws:iam::500926551923:role/iam-privesc-*",
+        "arn:aws:iam::500926551923:role/lateral-move-*"
+      ],
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": "ec2.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "DenySelfPrivilegeEscalation",
+      "Effect": "Deny",
+      "Action": "iam:*",
+      "Resource": [
+        "arn:aws:iam::500926551923:user/IaC_user",
+        "arn:aws:iam::500926551923:policy/*"
+      ]
+    }
+  ]
+}

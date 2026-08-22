@@ -32,6 +32,7 @@ See [`scenarios/01-s3-exfil/`](scenarios/01-s3-exfil/) for the first pack and it
 ## Repo layout
 
 ```
+iam/                   # scoped IAM policy for the Terraform deploy user
 scenarios/
   01-s3-exfil/
     terraform/       # VPC, EC2, misconfigured S3 bucket, CloudTrail
@@ -48,12 +49,12 @@ aws-attack-defense-roadmap.md  # original 8-week design doc, kept for reference
 - [AWS CLI v2](https://docs.aws.amazon.com/cli/) with an authenticated IAM identity (`aws sts get-caller-identity` should return something)
 - Python 3 + the project venv: `python3 -m venv .venv && .venv/bin/pip install ansible boto3`
 - An AWS account you're comfortable deploying *intentionally misconfigured* (but disposable) resources into. **Recommend AWS Budget alerts at $5/$8/$10** before deploying anything (see Safety below).
+- An IAM user for Terraform with the scoped policy in [`iam/`](iam/) attached — see [`iam/README.md`](iam/README.md) for setup and for the account-level Block Public Access check Scenario 01 depends on.
 
 ## Quick start (Scenario 1)
 
 ```bash
 cd scenarios/01-s3-exfil/terraform
-cp terraform.tfvars.example terraform.tfvars   # set allowed_ssh_cidr to YOUR_IP/32
 terraform init
 terraform plan
 terraform apply

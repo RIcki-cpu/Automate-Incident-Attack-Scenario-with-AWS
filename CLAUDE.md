@@ -56,6 +56,14 @@ Each scenario lives under `scenarios/NN-name/` and is self-contained:
 
 **Cost/safety convention:** the AWS provider sets `default_tags` (`Project`, `Scenario`, `ManagedBy`, `TTLMinutes`) and every S3 bucket is `force_destroy = true`. This tagging + force-destroy pattern is the project's primary defense against forgotten/orphaned resources — carry it into every new scenario.
 
+## AWS account constraints
+
+Terraform authenticates as `IaC_user`, which is deliberately **not** an admin. Its permissions come from `iam/iac-user-policy.json` (see `iam/README.md`), scoped by resource-name prefix: S3 buckets and IAM roles/instance-profiles must be named `s3-exfil-*`, `iam-privesc-*`, or `lateral-move-*`. **New scenarios must follow one of those prefixes or `terraform apply` will fail with AccessDenied** — if a new scenario needs a different name or a new AWS service, `iam/iac-user-policy.json` has to be updated and re-attached by an admin identity first.
+
+An explicit `Deny` prevents this user from modifying its own IAM identity, so it can never grant itself the missing permission — that always requires the account admin, which is the user's manual step, not something to attempt via the CLI.
+
+Scenario 01 also depends on **account-level Block Public Access being off**. If it's on, AWS silently rejects the public bucket policy and the scenario deploys but isn't actually vulnerable — the attack step then fails with a 403 that looks like a bug in the attack rather than a config problem. Check with `aws s3control get-public-access-block --account-id <ID>` before debugging anything else.
+
 ## Roadmap documents — which one is authoritative
 
 - `ROADMAP.md` — the **live** 3-week plan. Scope was deliberately compressed from 8 weeks to 3: all 3 scenarios are still in scope, but the dedicated Terraform-certification exam-prep track was dropped entirely. Check this file for current phase/status.
@@ -64,4 +72,4 @@ Each scenario lives under `scenarios/NN-name/` and is self-contained:
 
 ## Current status
 
-Scenario 01 (S3 Data Exfiltration): Terraform skeleton written and `validate`-clean; not yet deployed, attacked, or detected. Scenarios 02 (IAM privesc) and 03 (EC2 lateral movement): not started. Always confirm against each scenario's `manifest.yaml` `status` field rather than assuming.
+Scenario 01 (S3 Data Exfiltration): Terraform written and `validate`-clean (17 resources planned); not yet deployed, attacked, or detected — blocked on the `iam/` policy being attached. The instance has no SSH access or key pair by design (the attack is anonymous S3 access from the operator's own machine); port 22 returns in Week 2 when Ansible needs it. Scenarios 02 (IAM privesc) and 03 (EC2 lateral movement): not started. Always confirm against each scenario's `manifest.yaml` `status` field rather than assuming.

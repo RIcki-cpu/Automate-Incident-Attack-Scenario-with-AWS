@@ -1,5 +1,8 @@
-# Copy this file to terraform.tfvars and fill in your own values.
-# terraform.tfvars is gitignored — never commit it.
+# Copy this file to terraform.tfvars and adjust if you want non-default
+# values. terraform.tfvars is gitignored — never commit it.
+#
+# Every variable in variables.tf currently has a default, so this file is
+# optional for Scenario 01; it exists so you have somewhere obvious to
+# override things like the region.
 
-aws_region       = "us-east-1"
-allowed_ssh_cidr = "YOUR_IP/32" # find yours with: curl -s ifconfig.me
+aws_region = "us-east-1"

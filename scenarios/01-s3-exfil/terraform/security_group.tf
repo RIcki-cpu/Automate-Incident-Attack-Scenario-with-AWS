@@ -3,22 +3,18 @@
 # called a "network ACL"). Rules are allow-only and stateful: an allowed
 # inbound request's response traffic is automatically allowed back out —
 # you don't need a matching egress rule just to let replies through.
+#
+# NOTE: there is deliberately NO SSH (port 22) rule here. This scenario's
+# attack is anonymous S3 access run from your own machine — it never
+# touches this instance — so an SSH rule would be attack surface with no
+# purpose (and this scenario creates no EC2 key pair, so it wouldn't even
+# work). Port 22 comes back in Week 2, when Ansible needs SSH to
+# configure instances.
 
 resource "aws_security_group" "app" {
   name        = "${var.scenario_name}-app-sg"
-  description = "Scenario app server: SSH from operator IP + HTTP from anywhere (simulated public web app)"
+  description = "Scenario app server: HTTP only (simulated public web app); no SSH by design"
   vpc_id      = aws_vpc.this.id
-
-  # Locked to var.allowed_ssh_cidr (your IP/32) — this is deliberately
-  # NOT part of this scenario's vulnerability. If you ever see this as
-  # 0.0.0.0/0, that's a mistake to fix, not a scenario feature.
-  ingress {
-    description = "SSH from operator"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
 
   # Open to the world on purpose — this simulates a normal public web
   # app and exists for realism. It is NOT the misconfiguration this

@@ -10,13 +10,20 @@ A VPC with a public subnet, an EC2 "app server" with a tightly-scoped IAM role, 
 
 ## Deploy
 
+Prerequisite: the deploying IAM user needs the policy in [`iam/`](../../iam/)
+attached, and account-level Block Public Access must be off — otherwise AWS
+rejects the public bucket policy and the bucket won't actually be vulnerable.
+
 ```bash
 cd terraform
-cp terraform.tfvars.example terraform.tfvars   # set allowed_ssh_cidr to YOUR_IP/32
 terraform init
 terraform plan
 terraform apply
 ```
+
+No `terraform.tfvars` is required — every variable has a default. Copy
+`terraform.tfvars.example` if you want to override the region. There is no SSH
+access to the instance by design (see `security_group.tf`).
 
 Note the `data_bucket_public_url_example` output — that's the attack target.
 

@@ -24,14 +24,6 @@ variable "ttl_minutes" {
   default     = 60
 }
 
-# No `default` here on purpose: Terraform will refuse to run and ask you
-# for this value until you set it, which forces you to actually think
-# about it instead of accidentally leaving SSH open to the whole internet.
-variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to SSH into the scenario EC2 instance. Set this to YOUR_IP/32 — never 0.0.0.0/0."
-  type        = string
-}
-
 variable "instance_type" {
   description = "EC2 instance type for the scenario app server"
   type        = string
