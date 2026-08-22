@@ -17,13 +17,21 @@ scenario:
     - step: 3
       action: "List bucket contents anonymously (s3:ListBucket allowed to principal '*')"
   detection:
-    source: cloudtrail
+    source: cloudtrail_s3_data_events
     log_location: "s3://<trail_logs_bucket>/AWSLogs/<account_id>/CloudTrail/"
-    query: "TODO (Week 1 Day 2-3): Athena/CloudTrail query — eventName IN (GetObject, ListObjects) AND userIdentity.type = AWSAccount/anonymous AND requestParameters.bucketName = data bucket"
+    tool: "scripts/detect.sh (raw log + jq); Athena is the scale-up, see docs/technical-design.md"
+    signal: "userIdentity.accountId == 'anonymous' (unauthenticated caller) on the data bucket"
+    event_names: [GetObject, ListObjects]  # NOTE: anonymous `aws s3 ls` logs as ListObjects, NOT ListBucket
+    verified_findings:
+      - "GetObject by anonymous (curl) on customer_exports/customers_2026.csv"
+      - "ListObjects by anonymous (aws s3 ls --no-sign-request)"
+    caveats:
+      - "S3 object-level data events must be enabled on the trail; management events alone never show these calls"
+      - "Data-event logging is not retroactive and takes a few minutes to arm after trail creation; delivery then lags ~5-15 min"
   remediation:
     - "Re-enable S3 Block Public Access at the bucket (and account) level"
     - "Remove the wildcard-principal statement from the bucket policy"
     - "If public hosting is genuinely required, front the bucket with CloudFront + OAC instead of a public bucket policy"
   teardown: "terraform destroy"
 
-status: attacked # skeleton -> deployed -> attacked -> detected -> torn_down
+status: detected # skeleton -> deployed -> attacked -> detected -> torn_down

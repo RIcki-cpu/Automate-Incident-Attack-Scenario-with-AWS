@@ -27,13 +27,32 @@ access to the instance by design (see `security_group.tf`).
 
 Note the `data_bucket_public_url_example` output — that's the attack target.
 
-## Attack (manual — TODO Week 1 Day 2-3)
+## Attack
 
-Planned: an unauthenticated `curl` against the public object URL, then an anonymous `aws s3 ls --no-sign-request` against the bucket, with no AWS credentials involved on the attacker side. Will be scripted into `scripts/attack-s3-exfil.sh` once verified manually.
+Run `scripts/attack.sh`. It reads the target from `terraform output` and proves
+exfiltration two ways, both with **no AWS credentials**:
 
-## Detect (TODO Week 1 Day 2-3)
+1. `aws s3 ls s3://<bucket>/ --recursive --no-sign-request` — anonymous listing.
+2. `curl <public object URL>` — unauthenticated HTTPS GET of the decoy CSV.
 
-Planned: query CloudTrail S3 data events (via Athena over the trail's S3 logs, or CloudTrail Lake) filtering for `GetObject`/`ListObjects` events on this bucket where the requester is unauthenticated/anonymous. The finalized query will replace the `TODO` in `manifest.yaml`.
+Both succeed (HTTP 200, file downloaded) against an internet-public bucket.
+
+## Detect
+
+Run `scripts/detect.sh` — it syncs the CloudTrail S3 data-event logs and finds the
+anonymous access. The signal is **`userIdentity.accountId == "anonymous"`** (the
+caller has no identity), matched against `GetObject`/`ListObjects` on this bucket.
+
+Three things that matter here, proven while building this (see
+[`docs/technical-design.md`](../../docs/technical-design.md) for detail):
+
+- **Wait a few minutes after `terraform apply` before attacking.** S3 data-event
+  logging is not retroactive and takes a few minutes to arm on a new trail — an
+  attack fired immediately after apply is invisible and looks like a clean run.
+- After attacking, CloudTrail delivery lags **~5-15 min** before the event is
+  queryable.
+- The anonymous `aws s3 ls` shows up as event name **`ListObjects`**, not
+  `ListBucket`.
 
 ## Remediate
 

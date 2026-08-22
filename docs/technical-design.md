@@ -84,7 +84,7 @@ of the misconfiguration is a single named bucket.
 
 ## Scenario 01 — S3 Data Exfiltration
 
-**Status:** deployed & attacked; detection logic in progress.
+**Status:** deployed, attacked, and detected end-to-end (then torn down).
 **Difficulty:** beginner. **TTL:** 60 min.
 
 ### Vulnerability mechanics
@@ -134,21 +134,55 @@ an identity-less caller.
 
 ### Detection logic
 
-*(In progress — to be completed once CloudTrail data events for the attack above
-have delivered.)*
+Script: `scenarios/01-s3-exfil/scripts/detect.sh`. The trail
+(`scenarios/01-s3-exfil/terraform/cloudtrail.tf`) enables **S3 data events** on
+the data bucket — object-level logging that is off by default and without which
+anonymous `GetObject` calls would never appear in CloudTrail at all. The script
+syncs the raw log files and filters them with `jq`.
 
-The trail (`scenarios/01-s3-exfil/terraform/cloudtrail.tf`) enables **S3 data
-events** on the data bucket — object-level logging that is off by default and
-without which anonymous `GetObject` calls would never appear in CloudTrail at
-all. The detection will identify the anonymous read by matching CloudTrail
-records where the S3 object event targets this bucket and the caller is
-unauthenticated/anonymous.
+**The detection signal is the caller's lack of identity**, not its IP or user
+agent (an attacker controls both). An anonymous S3 request is logged with:
 
-**Open question being verified empirically, not assumed:** `GetObject` is
-definitely captured by an object-level data-event selector; `ListBucket` is a
-*bucket-level* operation and may not appear in object-level data events. The
-detection write-up will state what the logs actually showed rather than what the
-docs imply.
+```json
+"userIdentity": { "type": "AWSAccount", "principalId": "", "accountId": "anonymous" }
+```
+
+So the detection matches: `eventSource == s3.amazonaws.com` **and**
+`requestParameters.bucketName == <data bucket>` **and**
+`userIdentity.accountId == "anonymous"` **and**
+`eventName in ("GetObject", "ListObjects")`.
+
+**Verified findings (second attack run, 15:46 UTC):** both the anonymous
+`GetObject` (curl exfil of the CSV) and the anonymous `ListObjects` (the
+`aws s3 ls` enumeration) were captured, each with `accountId: "anonymous"`.
+
+Three empirical results that changed the design rather than being assumed:
+
+1. **`ListBucket` was the wrong event name.** The anonymous `aws s3 ls` is logged
+   as **`ListObjects`**, not `ListBucket` — `ListBucket` is the *IAM permission*
+   name, not the CloudTrail *event* name. A detection query filtering on
+   `ListBucket` would silently miss the enumeration. The manifest and script use
+   `ListObjects`.
+2. **Data-event logging has an activation gap.** The *first* attack ran seconds
+   after `terraform apply` created the trail and produced **zero** data events
+   across 20 minutes / 17 delivered log files, despite the trail reporting
+   `IsLogging: true` with no delivery error. The identical second attack, run
+   after the trail had been live ~25 minutes, was captured within ~5.5 minutes.
+   Object-level data-event logging is not retroactive and takes a few minutes to
+   arm after trail creation. **Implication for the cycle:** deploy → *wait a few
+   minutes* → attack → wait for delivery → detect. Attacking immediately after
+   apply yields a false "clean" result.
+3. **Management events are not enough.** Before data events armed, the only
+   S3 records touching the bucket were `GetBucketEncryption`/`GetBucketLogging`
+   from AWS's own scanners — the attack itself was absent. Object-level data
+   events are mandatory for this detection.
+
+**Athena as the scale-up.** Parsing raw logs with `jq` is ideal for one bucket
+and one incident and keeps the evidence visible. At many buckets or long time
+ranges it does not scale; the productionized version defines an Athena table over
+the CloudTrail S3 prefix and runs the same predicate as SQL
+(`WHERE useridentity.accountid = 'anonymous' AND eventname IN ('GetObject','ListObjects')`).
+Deferred deliberately — the raw-log proof is the teaching artifact.
 
 ### Remediation (the defense half)
 
