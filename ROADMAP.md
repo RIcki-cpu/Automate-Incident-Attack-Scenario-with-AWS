@@ -9,8 +9,8 @@ Start date: **2026-08-21**. Target ship date: **2026-09-11** (3 weeks).
 ## Week 1 — Foundations + Scenario 1 (S3 Data Exfiltration)
 
 - [x] Day 1 (2026-08-21): Environment setup — Terraform, AWS CLI v2, Ansible + boto3 (venv), git repo, GitHub repo, Claude memory, private project log. Terraform/Ansible core concepts (providers, resources, state, `plan`/`apply`/`destroy`; inventory, playbooks, idempotency). Scenario 1 Terraform skeleton: VPC, public subnet, EC2 app server, misconfigured public S3 bucket, CloudTrail.
-- [ ] Day 2-3: Finish Scenario 1 end-to-end: `terraform apply` → manual attack (anonymous S3 read) → CloudTrail/Athena detection query → `terraform destroy`. Confirm full cycle fits under 1 hour.
-- [ ] Day 4: YAML scenario manifest schema v1 (see `scenarios/01-s3-exfil/manifest.yaml`) finalized against the real deploy.
+- [x] Day 2-3: Scenario 1 end-to-end DONE: `terraform apply` → anonymous attack → CloudTrail data-event detection (raw log + jq) → `terraform destroy`. Cycle fits under 1h. Attack + detect scripted (`scripts/attack.sh`, `scripts/detect.sh`).
+- [x] Day 4: manifest schema v1 finalized against the real deploy (verified detection query, caveats).
 - [ ] Day 5: Wrap the manual attack into a script (`scripts/attack-s3-exfil.sh` or `.py`). Implement the 1-hour auto-teardown (EventBridge + Lambda, or scheduled `terraform destroy`).
 
 ## Week 2 — Scenario 2 (IAM Privilege Escalation) + Scenario 3 (EC2 Lateral Movement)
