@@ -1,0 +1,5 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region       = "us-east-1"
+allowed_ssh_cidr = "YOUR_IP/32" # find yours with: curl -s ifconfig.me

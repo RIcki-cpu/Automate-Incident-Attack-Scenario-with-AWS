@@ -1,0 +1,29 @@
+scenario:
+  name: "S3 Data Exfiltration"
+  id: "01-s3-exfil"
+  difficulty: beginner
+  ttl_minutes: 60
+  objectives:
+    - "Provision a VPC + app server backed by an S3 bucket for data exports"
+    - "Introduce a public-read bucket policy (the misconfiguration)"
+    - "Exfiltrate the decoy 'customer export' object as an unauthenticated attacker"
+    - "Detect the anonymous access via CloudTrail S3 data events"
+    - "Remediate and tear down within the TTL window"
+  attack_path:
+    - step: 1
+      action: "Recon: identify the bucket name (provided for the exercise; in the wild via app source, subdomain guessing, etc.)"
+    - step: 2
+      action: "Unauthenticated GET on the decoy object via its public HTTPS URL — no AWS credentials used"
+    - step: 3
+      action: "List bucket contents anonymously (s3:ListBucket allowed to principal '*')"
+  detection:
+    source: cloudtrail
+    log_location: "s3://<trail_logs_bucket>/AWSLogs/<account_id>/CloudTrail/"
+    query: "TODO (Week 1 Day 2-3): Athena/CloudTrail query — eventName IN (GetObject, ListObjects) AND userIdentity.type = AWSAccount/anonymous AND requestParameters.bucketName = data bucket"
+  remediation:
+    - "Re-enable S3 Block Public Access at the bucket (and account) level"
+    - "Remove the wildcard-principal statement from the bucket policy"
+    - "If public hosting is genuinely required, front the bucket with CloudFront + OAC instead of a public bucket policy"
+  teardown: "terraform destroy"
+
+status: skeleton # skeleton -> deployed -> attacked -> detected -> torn_down
