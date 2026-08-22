@@ -22,7 +22,7 @@ resource "aws_s3_bucket" "data" {
 
   tags = {
     Name = "${var.scenario_name}-data-bucket"
-    Note = "INTENTIONALLY MISCONFIGURED - lab use only, decoy data only"
+    Note = "INTENTIONALLY MISCONFIGURED - lab use only - decoy data only" # S3 tag values disallow commas
   }
 }
 
