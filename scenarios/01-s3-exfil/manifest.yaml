@@ -34,4 +34,4 @@ scenario:
     - "If public hosting is genuinely required, front the bucket with CloudFront + OAC instead of a public bucket policy"
   teardown: "terraform destroy"
 
-status: detected # skeleton -> deployed -> attacked -> detected -> torn_down
+status: torn_down # planned -> skeleton -> deployed -> attacked -> detected -> torn_down

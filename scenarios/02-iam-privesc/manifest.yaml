@@ -1,0 +1,14 @@
+scenario:
+  name: "IAM Privilege Escalation"
+  id: "02-iam-privesc"
+  difficulty: intermediate
+  ttl_minutes: 60
+  objectives: [] # TBD — Week 2
+  attack_path: [] # TBD — Week 2: AssumeRole escalation chain / over-permissive policy
+  detection:
+    source: cloudtrail
+    query: "TBD — CloudTrail IAM/STS events (AssumeRole, PassRole chains)"
+  remediation: [] # TBD
+  teardown: "terraform destroy"
+
+status: planned # planned -> skeleton -> deployed -> attacked -> detected -> torn_down

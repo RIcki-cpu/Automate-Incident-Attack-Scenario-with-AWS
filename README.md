@@ -1,5 +1,11 @@
 # AWS Attack-Defense Scenario Kit
 
+<p align="center">
+  <img src="docs/architecture-diagram.png" alt="Architecture diagram of Scenario 01: an anonymous internet attacker reaches a misconfigured public S3 bucket directly over HTTPS, bypassing the VPC and EC2 app server entirely, while CloudTrail logs S3 data events for detection" width="850">
+</p>
+
+<p align="center"><em>Scenario 01 in one picture: the attack (red) never touches the VPC or EC2 instance — it goes straight for a misconfigured S3 bucket policy.</em></p>
+
 Self-contained, disposable AWS "scenario packs" for practicing offensive techniques *and* writing the detection logic that catches them. Each scenario deploys with Terraform (+ Ansible where app config is needed), gets attacked, gets detected via CloudTrail / VPC Flow Logs, and tears itself down — designed to fit inside a 1-hour cost window.
 
 Built as a hands-on Terraform learning project and a security portfolio piece: deploy → attack → detect → remediate → destroy, for each scenario.
@@ -23,21 +29,21 @@ Most "cloud security" learning is either pure theory (read the whitepaper) or pu
 
 | # | Name | Status | Attack | Detection |
 |---|---|---|---|---|
-| 01 | S3 Data Exfiltration | 🚧 skeleton | Anonymous public-bucket read | CloudTrail S3 data events |
-| 02 | IAM Privilege Escalation | ⏳ planned | AssumeRole escalation chain | CloudTrail IAM/STS events |
-| 03 | EC2 Lateral Movement | ⏳ planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
+| 01 | [S3 Data Exfiltration](scenarios/01-s3-exfil/) | ✅ verified end-to-end | Anonymous public-bucket read | CloudTrail S3 data events |
+| 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | 📝 planned | AssumeRole escalation chain | CloudTrail IAM/STS events |
+| 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 📝 planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
 
-See [`scenarios/01-s3-exfil/`](scenarios/01-s3-exfil/) for the first pack and its manifest.
+Scenario 01 has run its full deploy → attack → detect → destroy cycle against real AWS infrastructure — see [`scenarios/01-s3-exfil/`](scenarios/01-s3-exfil/) for the walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind it).
 
 ## Repo layout
 
 ```
+docs/                  # architecture diagram + docs/technical-design.md (the deep "why")
 iam/                   # scoped IAM policy for the Terraform deploy user
 scenarios/
-  01-s3-exfil/
-    terraform/       # VPC, EC2, misconfigured S3 bucket, CloudTrail
-    manifest.yaml     # scenario schema: objectives, attack path, detection, teardown
-    README.md          # scenario-specific deploy/attack/detect/teardown walkthrough
+  01-s3-exfil/          # complete: terraform/, manifest.yaml, scripts/{attack,detect}.sh, README.md
+  02-iam-privesc/        # placeholder — Week 2
+  03-lateral-move/       # placeholder — Week 2
 .venv/                 # local Python env: ansible, boto3 (gitignored)
 ROADMAP.md             # working 3-week plan (this is the live plan)
 aws-attack-defense-roadmap.md  # original 8-week design doc, kept for reference

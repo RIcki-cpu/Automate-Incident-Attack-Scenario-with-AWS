@@ -1,0 +1,14 @@
+scenario:
+  name: "EC2 Lateral Movement"
+  id: "03-lateral-move"
+  difficulty: intermediate
+  ttl_minutes: 60
+  objectives: [] # TBD — Week 2
+  attack_path: [] # TBD — Week 2: pivot between instances via a security-group gap
+  detection:
+    source: vpc_flow_logs
+    query: "TBD — CloudWatch Logs Insights over VPC Flow Logs"
+  remediation: [] # TBD
+  teardown: "terraform destroy"
+
+status: planned # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
