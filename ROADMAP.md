@@ -11,7 +11,7 @@ Start date: **2026-08-21**. Target ship date: **2026-09-11** (3 weeks).
 - [x] Day 1 (2026-08-21): Environment setup — Terraform, AWS CLI v2, Ansible + boto3 (venv), git repo, GitHub repo, Claude memory, private project log. Terraform/Ansible core concepts (providers, resources, state, `plan`/`apply`/`destroy`; inventory, playbooks, idempotency). Scenario 1 Terraform skeleton: VPC, public subnet, EC2 app server, misconfigured public S3 bucket, CloudTrail.
 - [x] Day 2-3: Scenario 1 end-to-end DONE: `terraform apply` → anonymous attack → CloudTrail data-event detection (raw log + jq) → `terraform destroy`. Cycle fits under 1h. Attack + detect scripted (`scripts/attack.sh`, `scripts/detect.sh`).
 - [x] Day 4: manifest schema v1 finalized against the real deploy (verified detection query, caveats).
-- [ ] Day 5: Wrap the manual attack into a script (`scripts/attack-s3-exfil.sh` or `.py`). Implement the 1-hour auto-teardown (EventBridge + Lambda, or scheduled `terraform destroy`).
+- [x] Day 5 (deferred by design): attack scripting is done (`scripts/attack.sh`/`detect.sh`). The auto-teardown mechanism (EventBridge+Lambda vs. scheduled destroy) was considered and consciously deferred — manual `terraform destroy` + zombie sweep already proven reliable on Scenario 1. Revisit alongside Week 2's GitHub Actions work if it becomes worth the IAM Console round-trip a Lambda-based version would need.
 
 ## Week 2 — Scenario 2 (IAM Privilege Escalation) + Scenario 3 (EC2 Lateral Movement)
 

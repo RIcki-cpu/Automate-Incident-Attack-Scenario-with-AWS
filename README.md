@@ -30,7 +30,7 @@ Most "cloud security" learning is either pure theory (read the whitepaper) or pu
 | # | Name | Status | Attack | Detection |
 |---|---|---|---|---|
 | 01 | [S3 Data Exfiltration](scenarios/01-s3-exfil/) | ✅ verified end-to-end | Anonymous public-bucket read | CloudTrail S3 data events |
-| 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | 📝 planned | AssumeRole escalation chain | CloudTrail IAM/STS events |
+| 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | 🚧 skeleton | AssumeRole via overly-broad trust policy | CloudTrail AssumeRole event |
 | 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 📝 planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
 
 Scenario 01 has run its full deploy → attack → detect → destroy cycle against real AWS infrastructure — see [`scenarios/01-s3-exfil/`](scenarios/01-s3-exfil/) for the walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind it).

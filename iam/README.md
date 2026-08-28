@@ -20,8 +20,15 @@ exists to teach people to detect, so it's scoped instead.
   scenario prefixes, so it can't read or modify unrelated roles.
 - **`iam:PassRole`** is limited to scenario roles *and* conditioned on
   `iam:PassedToService = ec2.amazonaws.com`. Unconditional `PassRole` is itself
-  a classic privilege-escalation path — worth understanding, since it's roughly
-  what Scenario 02 will be about.
+  a classic privilege-escalation path, though it's not what Scenario 02 ended
+  up using — that scenario escalates via an overly-permissive **trust policy**
+  (a role trusting the account's `:root` ARN) instead. Both are real,
+  well-known IAM privesc patterns; see `docs/technical-design.md` for why the
+  trust-policy version was chosen.
+- **`ScenarioUsersOnly`** grants IAM *user* actions (`CreateUser`,
+  `CreateAccessKey`, etc.) scoped to `user/iam-privesc-*` — added for Scenario
+  02, which needs a real low-privilege user/access-key pair as its starting
+  foothold. Scenario 01 never needed this; it only touched roles.
 - **An explicit `Deny`** blocks the user from modifying its own IAM identity or
   any customer-managed policy, so it can't escalate its own privileges even if
   another statement is later widened by mistake.

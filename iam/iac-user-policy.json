@@ -40,9 +40,7 @@
         "s3:GetAccountPublicAccessBlock",
         "budgets:ViewBudget",
         "cloudtrail:DescribeTrails",
-        "cloudtrail:ListTrails",
-        "athena:*",
-        "glue:*"
+        "cloudtrail:ListTrails"
       ],
       "Resource": "*"
     },
@@ -82,6 +80,17 @@
         "arn:aws:iam::500926551923:instance-profile/iam-privesc-*",
         "arn:aws:iam::500926551923:instance-profile/lateral-move-*"
       ]
+    },
+    {
+      "Sid": "ScenarioUsersOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateUser", "iam:DeleteUser", "iam:GetUser",
+        "iam:TagUser", "iam:UntagUser", "iam:ListUserTags",
+        "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys", "iam:UpdateAccessKey",
+        "iam:PutUserPolicy", "iam:DeleteUserPolicy", "iam:GetUserPolicy", "iam:ListUserPolicies"
+      ],
+      "Resource": "arn:aws:iam::500926551923:user/iam-privesc-*"
     },
     {
       "Sid": "PassScenarioRolesToEc2Only",

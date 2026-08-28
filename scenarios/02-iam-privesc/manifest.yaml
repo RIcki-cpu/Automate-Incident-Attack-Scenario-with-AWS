@@ -3,12 +3,35 @@ scenario:
   id: "02-iam-privesc"
   difficulty: intermediate
   ttl_minutes: 60
-  objectives: [] # TBD — Week 2
-  attack_path: [] # TBD — Week 2: AssumeRole escalation chain / over-permissive policy
+  objectives:
+    - "Provision a low-privilege IAM user whose only real permission is a scoped sts:AssumeRole grant"
+    - "Provision a second, more-privileged role whose trust policy trusts the account's :root ARN (i.e. any authenticated principal in the account, not literally the root user)"
+    - "Escalate from the low-privilege user to the privileged role using only the low-privilege user's own credentials"
+    - "Detect the escalation via the CloudTrail AssumeRole event, distinguishing it from legitimate AssumeRole activity by naming both the caller and the target role"
+    - "Remediate and tear down within the TTL window"
+  attack_path:
+    - step: 1
+      action: "Start as the low-privilege analyst user (its own real, Terraform-issued access key — simulates a leaked low-priv credential, not root/admin access)"
+    - step: 2
+      action: "Confirm near-zero standing permissions (s3:ListAllMyBuckets denied)"
+    - step: 3
+      action: "Call sts:AssumeRole against the broad-read role using only the analyst's credentials — succeeds because of the role's overly-permissive trust policy, not because of any real relationship between the two identities"
+    - step: 4
+      action: "Use the returned temporary credentials to prove broader access was actually gained (list every bucket in the account)"
   detection:
-    source: cloudtrail
-    query: "TBD — CloudTrail IAM/STS events (AssumeRole, PassRole chains)"
-  remediation: [] # TBD
+    source: cloudtrail_management_events
+    log_location: "s3://<trail_logs_bucket>/AWSLogs/<account_id>/CloudTrail/"
+    tool: "scripts/detect.sh (raw log + jq) — same approach as Scenario 1, no Athena"
+    signal: "eventSource=sts.amazonaws.com, eventName=AssumeRole, requestParameters.roleArn targets the broad-read role, userIdentity identifies the analyst user"
+    event_names: [AssumeRole]
+    caveats:
+      - "AssumeRole is a management event, on by default — unlike Scenario 1's S3 data events, no trail activation delay is expected here, but this is unverified until run for real"
+      - "AssumeRole calls are common in any AWS account; detection must name BOTH the caller and the specific target role, not just match on event name alone"
+      - "CloudTrail delivery still lags ~5-15 min after the attack runs"
+  remediation:
+    - "Scope the broad-read role's trust policy to the specific principal(s) that legitimately need it — never trust the bare account :root ARN unless that really is the intent"
+    - "Scope the analyst user's sts:AssumeRole grant to only the specific role ARN(s) it actually needs, not a wildcard prefix"
+    - "Turn on IAM Access Analyzer, which specifically flags roles trusting overly-broad principals including account root"
   teardown: "terraform destroy"
 
-status: planned # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
+status: skeleton # planned -> skeleton -> deployed -> attacked -> detected -> torn_down

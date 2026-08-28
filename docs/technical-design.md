@@ -197,3 +197,110 @@ Deferred deliberately — the raw-log proof is the teaching artifact.
 
 `terraform destroy`. All buckets are `force_destroy = true`, so the decoy object
 and both buckets are removed cleanly.
+
+---
+
+## Scenario 02 — IAM Privilege Escalation
+
+**Status:** skeleton — Terraform written and `validate`-clean; not yet deployed,
+attacked, or detected. Sections below describe the design; anything about actual
+runtime behavior is marked as pending verification rather than asserted.
+**Difficulty:** intermediate. **TTL:** 60 min.
+
+### Vulnerability mechanics
+
+This scenario deploys no networking or compute at all — deliberately, unlike
+Scenario 01. IAM privilege escalation is purely an identity-layer problem, and a
+VPC/EC2 instance would add cost and clutter without adding a meaningful contrast
+the way Scenario 01's least-privilege EC2 role did against its bucket policy.
+
+The scenario follows the same **two-independent-misconfigurations** shape as
+Scenario 01 (`scenarios/02-iam-privesc/terraform/iam.tf`):
+
+1. **A low-privilege user's identity policy is too broad.** `iam-privesc-analyst`
+   has a real access key and exactly one grant: `sts:AssumeRole`, scoped to any
+   role matching the scenario's own name prefix (`aws_iam_user_policy.analyst_assume_role`).
+   On its own this looks reasonable — "scoped to our own roles."
+2. **A privileged role's trust policy is too broad.** `iam-privesc-broad-read`'s
+   trust policy (`aws_iam_role.broad_read`) trusts this account's `:root` ARN.
+   Counterintuitively, an IAM trust-policy `Principal` of
+   `arn:aws:iam::<account>:root` does not mean "only the root user" — it means
+   *any authenticated principal in the account*, provided that principal also has
+   its own `sts:AssumeRole` permission (which the analyst has, from #1). This is
+   one of the most common real-world IAM findings; most cloud security scanners
+   specifically flag "role trusts account root" as a misconfiguration.
+
+Neither alone is sufficient — the analyst's permission to *call* AssumeRole is
+inert unless the target's trust policy also allows it in, and the trust policy's
+looseness is inert unless something can actually call AssumeRole in the first
+place. Same "two locks" logic as Scenario 01's Block Public Access + public
+bucket policy, now applied to the identity layer instead of the storage layer —
+this recurring shape across scenarios is a deliberate pattern for the kit, not a
+coincidence.
+
+**The escalation target stays lab-safe on purpose.** `broad_read`'s actual
+permissions (`aws_iam_role_policy.broad_read_perms`) are read-only and
+account-wide (`s3:GetObject`/`ListBucket`/`ListAllMyBuckets`,
+`iam:ListUsers`/`ListRoles`) — a genuine, demonstrable escalation from the
+analyst's near-zero starting permissions, without granting anything destructive
+and without any path back to the real deploy user `IaC_user` (a completely
+separate identity, protected by its own explicit `Deny` — see the "AWS account
+constraints" section above).
+
+### Deploy-user permissions required
+
+Scenario 01 only needed IAM *role* actions; this scenario needs IAM *user*
+actions (`CreateUser`, `CreateAccessKey`, etc.), which `IaC_user` didn't have
+before. `iam/iac-user-policy.json` gained a new `ScenarioUsersOnly` statement
+scoped to `user/iam-privesc-*` — and, bundled into the same policy version to
+avoid a second Console round-trip, the unused `athena:*`/`glue:*` grants left
+over from Scenario 01 planning were removed (dead scope — no Athena/Glue
+resources exist anywhere in this repo).
+
+### Attack automation workflow
+
+Script: `scenarios/02-iam-privesc/scripts/attack.sh`. Reads the analyst's access
+key and the target role ARN from `terraform output` (the key via a `sensitive`
+output, `-raw`, never written to a file or printed). Four steps, each proving
+rather than asserting the state, mirroring Scenario 01's proof style:
+
+1. `sts:get-caller-identity` as the analyst — confirm the starting, low-priv identity.
+2. `s3:ListAllMyBuckets` as the analyst — expect and show `AccessDenied` (the "before").
+3. `sts:AssumeRole` against `broad_read`'s ARN, still using only the analyst's
+   own credentials — succeeds purely because of the trust-policy misconfiguration.
+4. `s3:ListAllMyBuckets` again, now using the *assumed role's* temporary
+   credentials — succeeds, proving the escalation is real (the "after").
+
+### Detection logic
+
+*(Pending — to be completed once this scenario is actually deployed and attacked.)*
+
+Script: `scenarios/02-iam-privesc/scripts/detect.sh`, following Scenario 01's
+raw-log-plus-`jq` approach rather than Athena. The planned signal:
+`eventSource == "sts.amazonaws.com"`, `eventName == "AssumeRole"`,
+`requestParameters.roleArn` matching the `broad_read` role, and
+`userIdentity.arn`/`userName` matching the analyst user — naming *both* sides of
+the relationship, since ordinary `AssumeRole` calls are common in any AWS account
+and matching on event name alone would produce false positives.
+
+A genuine contrast with Scenario 01 worth stating precisely: `AssumeRole` is a
+**management event**, captured by a trail's `include_management_events = true`
+automatically, with no data-event activation step and (expected, not yet
+confirmed) none of Scenario 01's "data events take a few minutes to arm" delay.
+CloudTrail's general ~5-15 min delivery lag still applies regardless. Per this
+project's established discipline, this will be confirmed empirically once the
+scenario is actually run, not assumed from documentation.
+
+### Remediation
+
+- Scope the `broad_read` role's trust policy to the specific principal(s) that
+  legitimately need it — never trust the bare account `:root` ARN unless that is
+  genuinely the intent.
+- Scope the analyst's `sts:AssumeRole` grant to the exact role ARN(s) it needs,
+  not a wildcard prefix.
+- Turn on IAM Access Analyzer, which specifically flags roles trusting
+  overly-broad principals including account root.
+
+### Teardown
+
+`terraform destroy`.
