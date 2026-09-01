@@ -195,17 +195,26 @@ Deferred deliberately — the raw-log proof is the teaching artifact.
 
 ### Teardown
 
-`terraform destroy`. All buckets are `force_destroy = true`, so the decoy object
+`terraform destroy` — but this surfaced a real deploy-user permission gap, in the
+same spirit as Scenario 01's `ec2:DescribeImages` gap (a missing permission
+appearing at runtime, not at `validate` time). Destroying an `aws_iam_user`
+requires `iam:ListGroupsForUser`: the Terraform AWS provider *unconditionally*
+clears a user's group memberships before deleting it, so it lists groups even
+when the user belongs to none. `ScenarioUsersOnly` didn't grant it, so the first
+destroy deleted the role/trail/bucket but left the user orphaned. It was cleaned
+up directly (`IaC_user` can `DeleteUser` via the CLI without the group-listing
+pre-check the provider insists on), and `iam:ListGroupsForUser` was added to the
+policy so a future `terraform destroy` completes cleanly — this needs the policy
+re-attached in the Console before the next deploy/destroy of this scenario, but
+did not block the completed run. All buckets are `force_destroy = true`, so the decoy object
 and both buckets are removed cleanly.
 
 ---
 
 ## Scenario 02 — IAM Privilege Escalation
 
-**Status:** skeleton — Terraform written and `validate`-clean; not yet deployed,
-attacked, or detected. Sections below describe the design; anything about actual
-runtime behavior is marked as pending verification rather than asserted.
-**Difficulty:** intermediate. **TTL:** 60 min.
+**Status:** complete — deployed, attacked, detected, and torn down clean (zombie
+sweep verified). **Difficulty:** intermediate. **TTL:** 60 min.
 
 ### Vulnerability mechanics
 
@@ -218,9 +227,16 @@ The scenario follows the same **two-independent-misconfigurations** shape as
 Scenario 01 (`scenarios/02-iam-privesc/terraform/iam.tf`):
 
 1. **A low-privilege user's identity policy is too broad.** `iam-privesc-analyst`
-   has a real access key and exactly one grant: `sts:AssumeRole`, scoped to any
-   role matching the scenario's own name prefix (`aws_iam_user_policy.analyst_assume_role`).
-   On its own this looks reasonable — "scoped to our own roles."
+   has a real access key and a blanket `sts:AssumeRole` on `"*"` — the genuinely
+   common "let this account assume roles, we'll tighten trust policies later"
+   convenience grant (`aws_iam_user_policy.analyst_permissions`). It also has
+   read-only IAM enumeration (`iam:ListRoles`/`GetRole`/`ListUsers`) — not the
+   escalation itself, but what lets the attacker *discover* the vulnerable role
+   rather than being handed it. (An earlier draft scoped the AssumeRole grant to
+   the scenario's own role prefix; that was corrected — it made the user look
+   hand-built to be escalated rather than a realistic over-permissioned account,
+   which is a worse teaching example. The blanket grant is both more realistic
+   and, combined with the trust-policy bug below, exactly as dangerous.)
 2. **A privileged role's trust policy is too broad.** `iam-privesc-broad-read`'s
    trust policy (`aws_iam_role.broad_read`) trusts this account's `:root` ARN.
    Counterintuitively, an IAM trust-policy `Principal` of
@@ -260,36 +276,52 @@ resources exist anywhere in this repo).
 ### Attack automation workflow
 
 Script: `scenarios/02-iam-privesc/scripts/attack.sh`. Reads the analyst's access
-key and the target role ARN from `terraform output` (the key via a `sensitive`
-output, `-raw`, never written to a file or printed). Four steps, each proving
-rather than asserting the state, mirroring Scenario 01's proof style:
+key from `terraform output` (a `sensitive` output, `-raw`, never written to a
+file or printed), then loads it into the shell's AWS credential env vars so every
+call runs *as the analyst* until the escalation. Five steps, each proving rather
+than asserting the state, mirroring Scenario 01's proof style:
 
 1. `sts:get-caller-identity` as the analyst — confirm the starting, low-priv identity.
-2. `s3:ListAllMyBuckets` as the analyst — expect and show `AccessDenied` (the "before").
-3. `sts:AssumeRole` against `broad_read`'s ARN, still using only the analyst's
+2. **Recon:** `iam:ListRoles` + `iam:GetRole` — the analyst *discovers* the
+   `broad_read` role and reads its trust policy, seeing it trusts `...:root`. The
+   attacker finds the target itself; it is not handed the ARN.
+3. `s3:ListAllMyBuckets` as the analyst — `AccessDenied` (the "before": the
+   analyst can enumerate IAM but cannot read data).
+4. `sts:AssumeRole` against `broad_read`'s ARN, still using only the analyst's
    own credentials — succeeds purely because of the trust-policy misconfiguration.
-4. `s3:ListAllMyBuckets` again, now using the *assumed role's* temporary
-   credentials — succeeds, proving the escalation is real (the "after").
+   The returned temporary credentials replace the analyst's in the shell.
+5. `s3:ListAllMyBuckets` again as the assumed role — succeeds, listing every
+   bucket in the account (the "after"). Same command denied in step 3.
 
 ### Detection logic
 
-*(Pending — to be completed once this scenario is actually deployed and attacked.)*
-
 Script: `scenarios/02-iam-privesc/scripts/detect.sh`, following Scenario 01's
-raw-log-plus-`jq` approach rather than Athena. The planned signal:
+raw-log-plus-`jq` approach rather than Athena. The signal:
 `eventSource == "sts.amazonaws.com"`, `eventName == "AssumeRole"`,
-`requestParameters.roleArn` matching the `broad_read` role, and
-`userIdentity.arn`/`userName` matching the analyst user — naming *both* sides of
-the relationship, since ordinary `AssumeRole` calls are common in any AWS account
-and matching on event name alone would produce false positives.
+`requestParameters.roleArn` matching the `broad_read` role, and `userIdentity`
+identifying the analyst user — naming *both* sides of the relationship, since
+ordinary `AssumeRole` calls are common in any AWS account and matching on event
+name alone would produce false positives.
 
-A genuine contrast with Scenario 01 worth stating precisely: `AssumeRole` is a
-**management event**, captured by a trail's `include_management_events = true`
-automatically, with no data-event activation step and (expected, not yet
-confirmed) none of Scenario 01's "data events take a few minutes to arm" delay.
-CloudTrail's general ~5-15 min delivery lag still applies regardless. Per this
-project's established discipline, this will be confirmed empirically once the
-scenario is actually run, not assumed from documentation.
+**Verified finding (2026-09-01):** the escalation logged one clean event —
+`eventName: AssumeRole`, `userIdentity.type: IAMUser`,
+`userIdentity.userName: iam-privesc-analyst`,
+`requestParameters.roleArn: .../role/iam-privesc-broad-read`,
+`requestParameters.roleSessionName: privesc-poc`. The caller/target pair is
+unambiguous, and `roleSessionName` is a bonus indicator (an attacker's chosen
+session name is attacker-controlled text that often stands out).
+
+Two empirical contrasts with Scenario 01, both confirmed rather than assumed:
+
+1. **No activation gap.** `AssumeRole` is a **management event**, captured by
+   `include_management_events = true` automatically. Unlike Scenario 01's very
+   first S3 data-event attack (which logged *nothing* for 20 minutes because
+   object-level data-event logging had not yet armed on the new trail), this
+   scenario's attack was captured on the first try, ~4.5 minutes after it ran.
+   Whether you need to worry about the activation gap depends entirely on whether
+   you're detecting a data event or a management event.
+2. **CloudTrail's general delivery lag still applies** (~4.5 min here, within the
+   usual ~5-15 min) — that part is the same regardless of event class.
 
 ### Remediation
 
@@ -303,4 +335,15 @@ scenario is actually run, not assumed from documentation.
 
 ### Teardown
 
-`terraform destroy`.
+`terraform destroy` — but this surfaced a real deploy-user permission gap, in the
+same spirit as Scenario 01's `ec2:DescribeImages` gap (a missing permission
+appearing at runtime, not at `validate` time). Destroying an `aws_iam_user`
+requires `iam:ListGroupsForUser`: the Terraform AWS provider *unconditionally*
+clears a user's group memberships before deleting it, so it lists groups even
+when the user belongs to none. `ScenarioUsersOnly` didn't grant it, so the first
+destroy deleted the role/trail/bucket but left the user orphaned. It was cleaned
+up directly (`IaC_user` can `DeleteUser` via the CLI without the group-listing
+pre-check the provider insists on), and `iam:ListGroupsForUser` was added to the
+policy so a future `terraform destroy` completes cleanly — this needs the policy
+re-attached in the Console before the next deploy/destroy of this scenario, but
+did not block the completed run.

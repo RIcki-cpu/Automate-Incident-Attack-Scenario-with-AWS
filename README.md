@@ -30,10 +30,10 @@ Most "cloud security" learning is either pure theory (read the whitepaper) or pu
 | # | Name | Status | Attack | Detection |
 |---|---|---|---|---|
 | 01 | [S3 Data Exfiltration](scenarios/01-s3-exfil/) | ✅ verified end-to-end | Anonymous public-bucket read | CloudTrail S3 data events |
-| 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | 🚧 skeleton | AssumeRole via overly-broad trust policy | CloudTrail AssumeRole event |
+| 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | ✅ verified end-to-end | AssumeRole via overly-broad trust policy | CloudTrail AssumeRole event |
 | 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 📝 planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
 
-Scenario 01 has run its full deploy → attack → detect → destroy cycle against real AWS infrastructure — see [`scenarios/01-s3-exfil/`](scenarios/01-s3-exfil/) for the walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind it).
+Scenarios 01 and 02 have each run their full deploy → attack → detect → destroy cycle against real AWS infrastructure — see each scenario directory for its walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind each).
 
 ## Repo layout
 
@@ -42,7 +42,7 @@ docs/                  # architecture diagram + docs/technical-design.md (the de
 iam/                   # scoped IAM policy for the Terraform deploy user
 scenarios/
   01-s3-exfil/          # complete: terraform/, manifest.yaml, scripts/{attack,detect}.sh, README.md
-  02-iam-privesc/        # placeholder — Week 2
+  02-iam-privesc/        # complete: same layout, identity-layer (no VPC/EC2)
   03-lateral-move/       # placeholder — Week 2
 .venv/                 # local Python env: ansible, boto3 (gitignored)
 ROADMAP.md             # working 3-week plan (this is the live plan)

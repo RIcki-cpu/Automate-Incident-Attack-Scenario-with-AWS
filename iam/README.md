@@ -28,7 +28,11 @@ exists to teach people to detect, so it's scoped instead.
 - **`ScenarioUsersOnly`** grants IAM *user* actions (`CreateUser`,
   `CreateAccessKey`, etc.) scoped to `user/iam-privesc-*` — added for Scenario
   02, which needs a real low-privilege user/access-key pair as its starting
-  foothold. Scenario 01 never needed this; it only touched roles.
+  foothold. Scenario 01 never needed this; it only touched roles. Note it
+  includes `iam:ListGroupsForUser`: the Terraform provider unconditionally
+  clears a user's group memberships before deleting it, so `terraform destroy`
+  fails without it even when the user has no groups (discovered at teardown —
+  if you attached this policy before that fix, re-attach the current version).
 - **An explicit `Deny`** blocks the user from modifying its own IAM identity or
   any customer-managed policy, so it can't escalate its own privileges even if
   another statement is later widened by mistake.

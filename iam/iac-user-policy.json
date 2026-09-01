@@ -88,7 +88,8 @@
         "iam:CreateUser", "iam:DeleteUser", "iam:GetUser",
         "iam:TagUser", "iam:UntagUser", "iam:ListUserTags",
         "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys", "iam:UpdateAccessKey",
-        "iam:PutUserPolicy", "iam:DeleteUserPolicy", "iam:GetUserPolicy", "iam:ListUserPolicies"
+        "iam:PutUserPolicy", "iam:DeleteUserPolicy", "iam:GetUserPolicy", "iam:ListUserPolicies",
+        "iam:ListGroupsForUser"
       ],
       "Resource": "arn:aws:iam::500926551923:user/iam-privesc-*"
     },

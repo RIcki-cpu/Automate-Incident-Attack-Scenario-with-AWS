@@ -4,9 +4,12 @@
 # needs TWO independent things to go wrong before privilege escalation is
 # possible:
 #
-#   1. The "analyst" user below has a blanket sts:AssumeRole grant for
-#      itself — a common real convenience-grant ("let people assume
-#      roles, we'll lock down trust policies properly later").
+#   1. The "analyst" user below has a blanket sts:AssumeRole grant on
+#      "*" (any role) — the genuinely common real convenience-grant
+#      ("let people assume roles, we'll lock down trust policies
+#      properly later"). It also has IAM read access, which is what lets
+#      an attacker DISCOVER the vulnerable role rather than being handed
+#      it.
 #   2. The "broad_read" role's TRUST policy trusts this account's :root
 #      ARN — which does NOT mean "only the root user." In AWS IAM, a
 #      trust-policy Principal of "arn:aws:iam::<account>:root" means "any
@@ -41,21 +44,46 @@ resource "aws_iam_access_key" "analyst" {
   user = aws_iam_user.analyst.name
 }
 
-# Misconfiguration #1: this user can call sts:AssumeRole against any role
-# matching the scenario's own naming prefix. On its own this looks
-# reasonable ("scoped to our own scenario roles, what's the harm?") — the
-# harm only appears once you look at broad_read's trust policy below.
-resource "aws_iam_user_policy" "analyst_assume_role" {
-  name = "${var.scenario_name}-analyst-assume-role"
+# The analyst's real permissions — deliberately shaped like a realistic
+# over-permissioned service account, NOT like an identity hand-built to
+# be escalated:
+#
+#   * AssumeAnyRole: sts:AssumeRole on "*". Scoping this to a single
+#     scenario role would look artificial (an identity that exists only
+#     to escalate). A real over-permissioned user has the blanket grant
+#     — it can ATTEMPT to assume any role; whether that succeeds is then
+#     decided entirely by each role's trust policy (which is exactly the
+#     point of this scenario). This is Misconfiguration #1.
+#   * EnumerateIam: read-only IAM enumeration. This is not the escalation
+#     itself — it's what makes the attack realistic. It lets the attacker
+#     list roles, read their trust policies, and thereby DISCOVER that
+#     broad_read trusts the account root, instead of being handed the
+#     role's ARN. IAM read access is itself a common over-grant precisely
+#     because it enables this kind of reconnaissance.
+resource "aws_iam_user_policy" "analyst_permissions" {
+  name = "${var.scenario_name}-analyst-permissions"
   user = aws_iam_user.analyst.name
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "sts:AssumeRole"
-      Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.scenario_name}-*"
-    }]
+    Statement = [
+      {
+        Sid      = "AssumeAnyRole"
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = "*"
+      },
+      {
+        Sid    = "EnumerateIam"
+        Effect = "Allow"
+        Action = [
+          "iam:ListRoles",
+          "iam:GetRole",
+          "iam:ListUsers",
+        ]
+        Resource = "*"
+      },
+    ]
   })
 }
 

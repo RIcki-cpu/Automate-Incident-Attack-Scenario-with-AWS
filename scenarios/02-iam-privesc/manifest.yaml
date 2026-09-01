@@ -24,8 +24,11 @@ scenario:
     tool: "scripts/detect.sh (raw log + jq) — same approach as Scenario 1, no Athena"
     signal: "eventSource=sts.amazonaws.com, eventName=AssumeRole, requestParameters.roleArn targets the broad-read role, userIdentity identifies the analyst user"
     event_names: [AssumeRole]
+    verified_findings:
+      - "AssumeRole by user/iam-privesc-analyst (callerType IAMUser) against role/iam-privesc-broad-read, roleSessionName=privesc-poc"
+      - "Detected ~4.5 min after the attack; NO activation gap (contrast Scenario 1, whose first S3 data-event attack logged nothing at all)"
     caveats:
-      - "AssumeRole is a management event, on by default — unlike Scenario 1's S3 data events, no trail activation delay is expected here, but this is unverified until run for real"
+      - "CONFIRMED: AssumeRole is a management event, on by default — no trail activation delay occurred, unlike Scenario 1's S3 data events which needed a few minutes to arm"
       - "AssumeRole calls are common in any AWS account; detection must name BOTH the caller and the specific target role, not just match on event name alone"
       - "CloudTrail delivery still lags ~5-15 min after the attack runs"
   remediation:
@@ -34,4 +37,4 @@ scenario:
     - "Turn on IAM Access Analyzer, which specifically flags roles trusting overly-broad principals including account root"
   teardown: "terraform destroy"
 
-status: skeleton # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
+status: torn_down # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
