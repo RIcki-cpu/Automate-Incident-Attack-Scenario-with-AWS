@@ -1,0 +1,8 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region       = "us-east-1"
+allowed_ssh_cidr = "YOUR_IP/32" # find yours with: curl -s ifconfig.me
+# public_key_path defaults to ~/.ssh/id_ed25519.pub — override if your key
+# lives elsewhere:
+# public_key_path = "~/.ssh/id_rsa.pub"

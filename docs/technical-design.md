@@ -347,3 +347,109 @@ pre-check the provider insists on), and `iam:ListGroupsForUser` was added to the
 policy so a future `terraform destroy` completes cleanly — this needs the policy
 re-attached in the Console before the next deploy/destroy of this scenario, but
 did not block the completed run.
+
+---
+
+## Scenario 03 — EC2 Lateral Movement
+
+**Status:** skeleton — Terraform `validate`-clean; Ansible playbook and
+attack/detect scripts written but not yet run against real infrastructure.
+Everything about runtime behavior below is marked pending verification rather
+than asserted, following the same discipline scenarios 01 and 02 used.
+**Difficulty:** intermediate. **TTL:** 60 min.
+
+### Vulnerability mechanics
+
+A two-tier network: a public **web host** (instance A) and a private **internal
+host** (instance B, no public IP, no route to the internet). The intended design
+is that the web tier reaches the internal tier only on an application port
+(8080). The vulnerability is a single rule in the internal host's security group
+(`scenarios/03-lateral-move/terraform/security_groups.tf`): it also allows **SSH
+(22) from the web tier's security group**. That one rule turns "A can call B's
+app port" into "A can open an interactive shell on B" — a tier boundary that
+should never be administratively crossable.
+
+Keeping with the kit's "one isolated misconfiguration" rule, everything else is
+sound: B genuinely has no public IP and no internet route, the operator's SSH
+access to A is locked to a single CIDR, and there are no over-broad IAM roles.
+The SG gap is the whole bug.
+
+Two supporting elements make the pivot *runnable* without being the vulnerability
+themselves: Ansible stages a reused **pivot SSH key** on A (modelling the very
+common mistake of leaving private keys on bastion/jump hosts) and a decoy
+`db_credentials.txt` on B (the prize). The detection targets the network
+consequence of the SG gap, so it does not depend on how the attacker obtained the
+key.
+
+### Why Ansible here (and not before)
+
+This is the first scenario that needs configuration management. Scenario 01's
+attack was anonymous S3 access (no host config), and Scenario 02 was pure IAM (no
+hosts at all). Scenario 03 has two live hosts that must be put into a specific
+state — a key staged on one, a key authorized and a file staged on the other —
+which is exactly Ansible's job. Terraform builds the hosts; Ansible configures
+them (`scenarios/03-lateral-move/ansible/playbook.yml`, run by
+`scripts/configure.sh`). Because B has no public IP, Ansible reaches it by
+hopping through A via an SSH `ProxyCommand` — the standard bastion pattern.
+
+### Attack automation workflow
+
+Script: `scenarios/03-lateral-move/scripts/attack.sh`, reading all targets from
+`terraform output`. The attacker starts with a foothold on A (the operator SSH
+access simulates an initial compromise) and:
+
+1. On A, finds the leaked pivot private key (`~/.ssh/pivot_key`).
+2. SSHes A→B using that key — succeeds only because B's SG wrongly allows 22 from
+   A. Everything is routed through A; the operator machine never touches B
+   directly (B has no public IP).
+3. Reads B's decoy `/opt/app/db_credentials.txt` — proof the pivot worked.
+
+The A→B SSH connection is the lateral movement the detection looks for.
+
+### Detection logic
+
+Script: `scenarios/03-lateral-move/scripts/detect.sh`. This scenario's attack is
+a **network** event, so detection uses **VPC Flow Logs**, delivered to a
+CloudWatch Logs group and queried with **CloudWatch Logs Insights** — deliberately
+a different telescope and a different tool from scenarios 01/02 (which parsed
+CloudTrail JSON from S3 with `jq`). Flow Logs record flow metadata (src/dst IP,
+port, protocol, ACCEPT/REJECT), not packet contents — which is exactly enough to
+see "A opened a connection to B on port 22."
+
+The signal: an `ACCEPT`ed flow where `srcAddr` is A's private IP, `dstAddr` is B's
+private IP, and `dstPort` is 22. The web tier opening SSH to the data tier is the
+lateral-movement signature; the query names the specific A→B:22 flow rather than
+matching "any port 22 traffic."
+
+**Pending empirical verification (not yet run):** the exact Flow Logs field names
+as exposed in Logs Insights (`srcAddr`/`dstAddr`/`dstPort`/`action`), the A→B SSH
+ProxyJump/pivot mechanics, and the delivery timing (VPC Flow Logs have their own
+lag plus the `max_aggregation_interval`, set to 60s here). These will be
+confirmed on first real deploy, exactly as Scenario 01's `ListObjects`-vs-
+`ListBucket` surprise and Scenario 02's no-activation-gap finding were confirmed
+rather than assumed.
+
+### Deploy-user permissions required
+
+The largest policy expansion of the three scenarios, bundled into one Console
+re-attach: EC2 key-pair actions and `CreateFlowLogs`/`DeleteFlowLogs` (added to
+`NetworkAndCompute`); a new `ScenarioFlowLogs` statement for the CloudWatch Logs
+group and Logs Insights queries; and `PassScenarioRolesToServices` (formerly
+`...ToEc2Only`) broadened so a `lateral-move-*` role can be passed to
+`vpc-flow-logs.amazonaws.com`. The pending `iam:ListGroupsForUser` fix from
+Scenario 02 rides along in the same version.
+
+### Remediation
+
+- Remove the SSH (22) rule from the internal host's security group; the web tier
+  should reach it only on the intended application port.
+- Never leave private keys on bastion/jump hosts and never reuse one key across
+  tiers — prefer SSH agent forwarding or short-lived certificates.
+- Segment tiers so a web-tier compromise cannot administratively reach the data
+  tier (tight per-SG rules, separate subnets, restrictive NACLs).
+
+### Teardown
+
+`terraform destroy`. The locally-generated pivot keys (`ansible/keys/`) and the
+generated `ansible/inventory.ini` are gitignored; delete them for a fully clean
+slate.

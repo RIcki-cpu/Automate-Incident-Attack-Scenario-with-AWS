@@ -38,6 +38,13 @@ exists to teach people to detect, so it's scoped instead.
   another statement is later widened by mistake.
 - **EC2** actions are enumerated (not `ec2:*`) but apply account-wide, since
   EC2 resource-level permissions can't scope resources that don't exist yet.
+- **`ScenarioFlowLogs`** grants CloudWatch Logs actions (create/query the log
+  group VPC Flow Logs deliver to) — added for Scenario 03, whose detection is
+  network-flow-based rather than CloudTrail-based. `NetworkAndCompute` also
+  gained EC2 key-pair and `CreateFlowLogs`/`DeleteFlowLogs` actions, and
+  `PassScenarioRolesToServices` (formerly `...ToEc2Only`) now also allows
+  passing a `lateral-move-*` role to `vpc-flow-logs.amazonaws.com` so Flow Logs
+  can write to CloudWatch Logs.
 
 ## Applying it
 

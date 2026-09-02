@@ -3,12 +3,39 @@ scenario:
   id: "03-lateral-move"
   difficulty: intermediate
   ttl_minutes: 60
-  objectives: [] # TBD — Week 2
-  attack_path: [] # TBD — Week 2: pivot between instances via a security-group gap
+  objectives:
+    - "Provision a two-tier VPC: a public web host (A) and a private internal host (B)"
+    - "Introduce a security-group gap: B accepts SSH from the web tier's SG when it should only accept an app port"
+    - "Configure both hosts with Ansible into the vulnerable state (leaked pivot key on A, decoy prize on B)"
+    - "From a foothold on A, pivot over SSH to B and read the decoy prize"
+    - "Detect the lateral movement in VPC Flow Logs via CloudWatch Logs Insights"
+    - "Remediate and tear down within the TTL window"
+  attack_path:
+    - step: 1
+      action: "Land on the public web host A (operator SSH foothold, simulating an initial compromise)"
+    - step: 2
+      action: "Find the reused/leaked pivot private key left on A (~/.ssh/pivot_key)"
+    - step: 3
+      action: "SSH from A to the private internal host B using that key — works only because B's SG wrongly allows 22 from A's SG"
+    - step: 4
+      action: "Read the decoy /opt/app/db_credentials.txt on B (proof of successful lateral movement)"
   detection:
     source: vpc_flow_logs
-    query: "TBD — CloudWatch Logs Insights over VPC Flow Logs"
-  remediation: [] # TBD
+    log_location: "CloudWatch Logs group /aws/vpc/lateral-move"
+    tool: "scripts/detect.sh (CloudWatch Logs Insights) — NOT jq-over-S3 like scenarios 1/2, since Flow Logs land in CloudWatch Logs"
+    signal: "An ACCEPTED flow srcAddr=<web private IP> dstAddr=<internal private IP> dstPort=22 — the web tier opening SSH to the data tier, which should never happen"
+    query: |
+      fields @timestamp, srcAddr, dstAddr, dstPort, action
+      | filter srcAddr = "<web_private_ip>" and dstAddr = "<internal_private_ip>" and dstPort = 22 and action = "ACCEPT"
+      | sort @timestamp desc
+    caveats:
+      - "UNVERIFIED until first real run: exact Flow Logs field names in Logs Insights (srcAddr/dstAddr/dstPort/action) and the A->B SSH ProxyJump/pivot mechanics need confirming on deploy, same discipline as scenarios 1/2"
+      - "VPC Flow Logs have their own delivery lag (a few minutes) plus the trail's max_aggregation_interval (set to 60s here) before a flow appears"
+      - "Detection matches the specific A->B:22 flow, not 'any port 22 traffic' — the point is the web tier reaching the data tier over SSH"
+  remediation:
+    - "Remove the SSH (22) rule from the internal host's security group — the web tier should reach it only on the intended app port"
+    - "Do not leave private keys on bastion/jump hosts; use SSH agent forwarding or per-host short-lived certs, and never reuse one key across tiers"
+    - "Segment tiers so a web-tier compromise cannot reach the data tier administratively (separate SGs, least-privilege rules, ideally separate subnets with tight NACLs)"
   teardown: "terraform destroy"
 
-status: planned # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
+status: skeleton # planned -> skeleton -> deployed -> attacked -> detected -> torn_down

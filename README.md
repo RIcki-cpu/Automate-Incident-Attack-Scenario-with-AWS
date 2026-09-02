@@ -31,7 +31,7 @@ Most "cloud security" learning is either pure theory (read the whitepaper) or pu
 |---|---|---|---|---|
 | 01 | [S3 Data Exfiltration](scenarios/01-s3-exfil/) | ✅ verified end-to-end | Anonymous public-bucket read | CloudTrail S3 data events |
 | 02 | [IAM Privilege Escalation](scenarios/02-iam-privesc/) | ✅ verified end-to-end | AssumeRole via overly-broad trust policy | CloudTrail AssumeRole event |
-| 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 📝 planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
+| 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 🚧 skeleton | Security-group gap pivot (SSH A→B) | VPC Flow Logs → Logs Insights |
 
 Scenarios 01 and 02 have each run their full deploy → attack → detect → destroy cycle against real AWS infrastructure — see each scenario directory for its walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind each).
 
@@ -49,7 +49,7 @@ iam/                   # scoped IAM policy for the Terraform deploy user
 scenarios/
   01-s3-exfil/          # complete: terraform/, manifest.yaml, scripts/{attack,detect}.sh, README.md
   02-iam-privesc/        # complete: same layout, identity-layer (no VPC/EC2)
-  03-lateral-move/       # placeholder — Week 2
+  03-lateral-move/       # skeleton: two-tier VPC, Ansible-configured, Flow Logs detection
 .venv/                 # local Python env: ansible, boto3 (gitignored)
 ROADMAP.md             # working 3-week plan (this is the live plan)
 aws-attack-defense-roadmap.md  # original 8-week design doc, kept for reference
@@ -85,7 +85,7 @@ terraform destroy   # always tear down when you're done
 
 ## Roadmap
 
-[ROADMAP.md](ROADMAP.md) is the live 3-week plan this project is currently executing against. [aws-attack-defense-roadmap.md](aws-attack-defense-roadmap.md) is the original 8-week design doc it was compressed from — kept for reference, not actively followed.
+[ROADMAP.md](ROADMAP.md) is the live 3-week plan this project is currently executing against. [aws-attack-defense-roadmap.md](aws-attack-defense-roadmap.md) is the original 8-week design doc it was compressed from — kept for reference, not actively followed. [docs/future-work.md](docs/future-work.md) captures a larger multi-stage "full-chain compromise" idea deliberately kept out of this kit's scope.
 
 ## License
 

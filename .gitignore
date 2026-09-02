@@ -29,6 +29,11 @@ __pycache__/
 
 # Private project log (not for GitHub)
 log_project.md
+architecture-diagram.md
 
 # OS
 .DS_Store
+
+# Scenario 3 generated pivot keys (never commit)
+scenarios/03-lateral-move/ansible/keys/
+scenarios/03-lateral-move/ansible/inventory.ini

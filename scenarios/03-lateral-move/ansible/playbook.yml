@@ -1,0 +1,69 @@
+---
+# Configures the two hosts into the scenario's vulnerable-but-runnable
+# state. This is the step that finally uses Ansible (scenarios 1 and 2
+# needed no host configuration; this one does). Run it via
+# scripts/configure.sh, which generates the inventory from terraform
+# output and reaches the private host through the public one (ProxyJump).
+#
+# What it sets up:
+#   web (A):      leaves a "pivot" private key on disk — the deliberately
+#                 leaked credential an attacker finds on a bastion and
+#                 reuses. (Key reuse / keys left on jump hosts is an
+#                 extremely common real mistake.)
+#   internal (B): authorizes that pivot key for ec2-user, and stages a
+#                 decoy "database credentials" file as the prize that
+#                 proves the pivot succeeded.
+#
+# The pivot key pair itself is generated locally by configure.sh (into a
+# gitignored keys/ dir) and passed in as pivot_public_key / the private
+# key is copied to A.
+
+- name: Configure the web (bastion) host
+  hosts: web
+  become: true
+  vars:
+    pivot_private_key_src: "{{ playbook_dir }}/keys/pivot_key"
+  tasks:
+    - name: Ensure ec2-user .ssh dir exists
+      ansible.builtin.file:
+        path: /home/ec2-user/.ssh
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: "0700"
+
+    - name: Leave the (deliberately leaked) pivot private key on the bastion
+      ansible.builtin.copy:
+        src: "{{ pivot_private_key_src }}"
+        dest: /home/ec2-user/.ssh/pivot_key
+        owner: ec2-user
+        group: ec2-user
+        mode: "0600"
+
+- name: Configure the internal host
+  hosts: internal
+  become: true
+  vars:
+    pivot_public_key: "{{ lookup('file', playbook_dir + '/keys/pivot_key.pub') }}"
+  tasks:
+    - name: Authorize the pivot key for ec2-user (so the leaked key from A works here)
+      ansible.posix.authorized_key:
+        user: ec2-user
+        key: "{{ pivot_public_key }}"
+        state: present
+
+    - name: Create the decoy app directory
+      ansible.builtin.file:
+        path: /opt/app
+        state: directory
+        mode: "0755"
+
+    - name: Stage the decoy "database credentials" (the prize — fake data only)
+      ansible.builtin.copy:
+        dest: /opt/app/db_credentials.txt
+        mode: "0600"
+        content: |
+          # INTERNAL - do not distribute (DECOY DATA - lab only)
+          DB_HOST=internal-db.lateral-move.local
+          DB_USER=svc_ecommerce
+          DB_PASS=not-a-real-password-decoy-1234
