@@ -1,6 +1,6 @@
 # Scenario 01 — S3 Data Exfiltration
 
-**Status:** 🚧 skeleton (Terraform deploys; attack/detection steps below are TODO for Week 1 Day 2-3)
+**Status:** ✅ verified end-to-end (deployed, attacked, detected, torn down clean — see [`manifest.yaml`](manifest.yaml) `status`)
 
 ## What this deploys
 

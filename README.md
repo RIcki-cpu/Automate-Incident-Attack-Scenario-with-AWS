@@ -1,7 +1,7 @@
 # AWS Attack-Defense Scenario Kit
 
 <p align="center">
-  <img src="docs/architecture-diagram.png" alt="Architecture diagram of Scenario 01: an anonymous internet attacker reaches a misconfigured public S3 bucket directly over HTTPS, bypassing the VPC and EC2 app server entirely, while CloudTrail logs S3 data events for detection" width="850">
+  <img src="docs/scenario-01-architecture.png" alt="Architecture diagram of Scenario 01: an anonymous internet attacker reaches a misconfigured public S3 bucket directly over HTTPS, bypassing the VPC and EC2 app server entirely, while CloudTrail logs S3 data events for detection" width="850">
 </p>
 
 <p align="center"><em>Scenario 01 in one picture: the attack (red) never touches the VPC or EC2 instance — it goes straight for a misconfigured S3 bucket policy.</em></p>
@@ -34,6 +34,12 @@ Most "cloud security" learning is either pure theory (read the whitepaper) or pu
 | 03 | [EC2 Lateral Movement](scenarios/03-lateral-move/) | 📝 planned | Security-group gap pivot | VPC Flow Logs → Logs Insights |
 
 Scenarios 01 and 02 have each run their full deploy → attack → detect → destroy cycle against real AWS infrastructure — see each scenario directory for its walkthrough and [`docs/technical-design.md`](docs/technical-design.md) for the full technical writeup (vulnerability mechanics, verified findings, and the design tradeoffs behind each).
+
+<p align="center">
+  <img src="docs/scenario-02-architecture.png" alt="Architecture diagram of Scenario 02: a low-privilege IAM analyst user is denied direct S3 access, but assumes an over-permissive role (its trust policy trusts the account root) to gain broader access, while CloudTrail logs the AssumeRole event for detection" width="720">
+</p>
+
+<p align="center"><em>Scenario 02: the analyst can't read S3 directly, so it escalates through a role that trusts too broadly — CloudTrail catches the <code>AssumeRole</code>.</em></p>
 
 ## Repo layout
 
