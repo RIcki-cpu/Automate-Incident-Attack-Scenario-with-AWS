@@ -68,7 +68,7 @@ second managed object with its own admin lifecycle (create, attach, keep in
 sync), which is more machinery than a disposable single-user lab account
 warrants; the `Deny` delivers most of the protection in one object. **This is a
 conscious tradeoff, and converting to a permission boundary is a reasonable
-Week-2 hardening task** — noted here rather than silently decided so the
+future hardening task** — noted here rather than silently decided so the
 reasoning is on the record.
 
 ### Cost and blast-radius controls

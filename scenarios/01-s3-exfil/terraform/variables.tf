@@ -19,7 +19,7 @@ variable "scenario_name" {
 }
 
 variable "ttl_minutes" {
-  description = "Intended lifetime of this scenario before teardown (tag/metadata only for now — auto-teardown lands Week 1 Day 5)"
+  description = "Intended lifetime of this scenario before teardown (tag/metadata only for now — auto-teardown is a planned enhancement)"
   type        = number
   default     = 60
 }

@@ -1,6 +1,6 @@
 # Future Work
 
-Ideas deliberately kept *out* of this kit's 3-week scope, captured so they aren't
+Ideas deliberately kept *out* of this kit's scope, captured so they aren't
 lost. This kit's design contract is small, cheap, disposable, one-isolated-
 misconfiguration-per-scenario, deploy→attack→detect→destroy in under an hour.
 The ideas below intentionally break that contract, which is exactly why they

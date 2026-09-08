@@ -15,7 +15,8 @@ exists to teach people to detect, so it's scoped instead.
 ## How it's scoped
 
 - **S3** is restricted by bucket-name prefix (`s3-exfil-*`, `iam-privesc-*`,
-  `lateral-move-*`) — the user cannot touch buckets outside the scenarios.
+  `lateral-move-*`, and `tfstate-*` for the optional remote-state backend) — the
+  user cannot touch buckets outside the scenarios.
 - **IAM** is restricted to role and instance-profile names using those same
   scenario prefixes, so it can't read or modify unrelated roles.
 - **`iam:PassRole`** is limited to scenario roles *and* conditioned on

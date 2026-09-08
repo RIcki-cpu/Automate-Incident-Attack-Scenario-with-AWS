@@ -51,7 +51,9 @@
         "arn:aws:s3:::iam-privesc-*",
         "arn:aws:s3:::iam-privesc-*/*",
         "arn:aws:s3:::lateral-move-*",
-        "arn:aws:s3:::lateral-move-*/*"
+        "arn:aws:s3:::lateral-move-*/*",
+        "arn:aws:s3:::tfstate-*",
+        "arn:aws:s3:::tfstate-*/*"
       ]
     },
     {

@@ -41,18 +41,24 @@ All three scenarios have run their full deploy → attack → detect → destroy
 
 <p align="center"><em>Scenario 02: the analyst can't read S3 directly, so it escalates through a role that trusts too broadly — CloudTrail catches the <code>AssumeRole</code>.</em></p>
 
+<p align="center">
+  <img src="docs/scenario-03-architecture.png" alt="Architecture diagram of Scenario 03: an attacker gets access to a public web host, finds an SSH key, uses it to reach a private internal host through a security-group gap, and steals decoy database credentials, while VPC Flow Logs record the lateral movement" width="720">
+</p>
+
+<p align="center"><em>Scenario 03: the attacker lands on the public web host, finds an SSH key, and pivots to the private host through a security-group gap — VPC Flow Logs catch the web→internal SSH.</em></p>
+
 ## Repo layout
 
 ```
-docs/                  # architecture diagram + docs/technical-design.md (the deep "why")
+docs/                  # architecture diagrams + technical-design.md (the deep "why") + remote-state.md
 iam/                   # scoped IAM policy for the Terraform deploy user
+scripts/               # cross-scenario helpers (e.g. remote-state.sh)
+state-backend/         # optional one-time bootstrap for S3 remote Terraform state
 scenarios/
   01-s3-exfil/          # complete: terraform/, manifest.yaml, scripts/{attack,detect}.sh, README.md
   02-iam-privesc/        # complete: same layout, identity-layer (no VPC/EC2)
   03-lateral-move/       # complete: two-tier VPC, Ansible + user_data, Flow Logs detection
 .venv/                 # local Python env: ansible, boto3 (gitignored)
-ROADMAP.md             # working 3-week plan (this is the live plan)
-aws-attack-defense-roadmap.md  # original 8-week design doc, kept for reference
 ```
 
 ## Prerequisites
@@ -81,11 +87,15 @@ terraform destroy   # always tear down when you're done
 - Every scenario is tagged (`Project`, `Scenario`, `TTLMinutes`) and `force_destroy`'d so `terraform destroy` always fully cleans up.
 - The S3 buckets in these scenarios are **intentionally public/misconfigured by design** — never put real data in them, and never leave one deployed longer than the scenario needs.
 - Set up AWS Budget alerts before your first `apply`. A forgotten `t3.micro` is cheap (~$7.50/mo) but a forgotten public bucket is a real risk if it ever holds anything other than decoy data.
-- A 1-hour auto-teardown mechanism (EventBridge + Lambda, or scheduled `terraform destroy`) is planned per scenario — see [ROADMAP.md](ROADMAP.md).
+- A 1-hour auto-teardown mechanism (EventBridge + Lambda, or scheduled `terraform destroy`) is a planned enhancement; for now, always run `terraform destroy` when you're done.
 
-## Roadmap
+## Optional: remote Terraform state
 
-[ROADMAP.md](ROADMAP.md) is the live 3-week plan this project is currently executing against. [aws-attack-defense-roadmap.md](aws-attack-defense-roadmap.md) is the original 8-week design doc it was compressed from — kept for reference, not actively followed. [docs/future-work.md](docs/future-work.md) captures a larger multi-stage "full-chain compromise" idea deliberately kept out of this kit's scope.
+Scenarios use **local** state by default (clone and go). If you'd rather keep state in a versioned, encrypted, private **S3 bucket** — with S3-native locking, so **no DynamoDB table** — it's an opt-in, Terraform-created setup: see [`docs/remote-state.md`](docs/remote-state.md).
+
+## What's next
+
+All three scenarios are complete and verified end-to-end. [docs/future-work.md](docs/future-work.md) sketches a larger multi-stage "full-chain compromise" idea deliberately kept out of this kit's scope.
 
 ## License
 

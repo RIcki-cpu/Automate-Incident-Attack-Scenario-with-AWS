@@ -37,3 +37,13 @@ architecture-diagram.md
 # Scenario 3 generated pivot keys (never commit)
 scenarios/03-lateral-move/ansible/keys/
 scenarios/03-lateral-move/ansible/inventory.ini
+
+# Roadmap & time-planning kept local (not public)
+ROADMAP.md
+aws-attack-defense-roadmap.md
+# User scratch / WIP
+scenarios/03-lateral-move/text.tx
+*.drawio
+
+# Opt-in remote-state backend blocks (local choice, never committed)
+backend.tf

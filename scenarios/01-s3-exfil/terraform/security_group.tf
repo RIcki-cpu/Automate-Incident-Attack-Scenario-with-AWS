@@ -8,7 +8,7 @@
 # attack is anonymous S3 access run from your own machine — it never
 # touches this instance — so an SSH rule would be attack surface with no
 # purpose (and this scenario creates no EC2 key pair, so it wouldn't even
-# work). Port 22 comes back in Week 2, when Ansible needs SSH to
+# work). Port 22 comes back in Scenario 03, when Ansible needs SSH to
 # configure instances.
 
 resource "aws_security_group" "app" {
