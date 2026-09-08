@@ -10,6 +10,13 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    # Used to generate the pivot key pair at plan time so the internal host
+    # can authorize it at boot (via user_data) — no SSH-in needed to
+    # configure B. This is a local-only provider (no AWS calls).
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 

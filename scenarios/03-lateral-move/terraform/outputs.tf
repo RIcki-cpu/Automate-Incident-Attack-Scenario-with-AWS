@@ -33,3 +33,12 @@ output "ssh_to_web_hint" {
   description = "How to reach the foothold host"
   value       = "ssh ec2-user@${aws_instance.web.public_ip}"
 }
+
+# The leaked pivot private key. configure.sh writes this to a gitignored
+# file that Ansible then plants on the web host. Sensitive so it's never
+# printed by apply/plan — only reachable via `terraform output -raw`.
+output "pivot_private_key" {
+  description = "Private key Ansible plants on the web host (the leaked pivot credential)"
+  value       = tls_private_key.pivot.private_key_openssh
+  sensitive   = true
+}

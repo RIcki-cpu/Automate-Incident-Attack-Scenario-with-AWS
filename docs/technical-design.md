@@ -352,11 +352,8 @@ did not block the completed run.
 
 ## Scenario 03 — EC2 Lateral Movement
 
-**Status:** skeleton — Terraform `validate`-clean; Ansible playbook and
-attack/detect scripts written but not yet run against real infrastructure.
-Everything about runtime behavior below is marked pending verification rather
-than asserted, following the same discipline scenarios 01 and 02 used.
-**Difficulty:** intermediate. **TTL:** 60 min.
+**Status:** complete — deployed, attacked, detected, and torn down clean (zombie
+sweep verified). **Difficulty:** intermediate. **TTL:** 60 min.
 
 ### Vulnerability mechanics
 
@@ -375,22 +372,37 @@ access to A is locked to a single CIDR, and there are no over-broad IAM roles.
 The SG gap is the whole bug.
 
 Two supporting elements make the pivot *runnable* without being the vulnerability
-themselves: Ansible stages a reused **pivot SSH key** on A (modelling the very
-common mistake of leaving private keys on bastion/jump hosts) and a decoy
+themselves: a **leaked pivot SSH key** planted on A (modelling the very common
+mistake of leaving a reusable private key on a jump host) and a decoy
 `db_credentials.txt` on B (the prize). The detection targets the network
 consequence of the SG gap, so it does not depend on how the attacker obtained the
 key.
 
-### Why Ansible here (and not before)
+### Why Ansible here (and how the config path shapes the detection)
 
-This is the first scenario that needs configuration management. Scenario 01's
-attack was anonymous S3 access (no host config), and Scenario 02 was pure IAM (no
-hosts at all). Scenario 03 has two live hosts that must be put into a specific
-state — a key staged on one, a key authorized and a file staged on the other —
-which is exactly Ansible's job. Terraform builds the hosts; Ansible configures
-them (`scenarios/03-lateral-move/ansible/playbook.yml`, run by
-`scripts/configure.sh`). Because B has no public IP, Ansible reaches it by
-hopping through A via an SSH `ProxyCommand` — the standard bastion pattern.
+This is the first scenario to use Ansible — but with a deliberately *smaller*
+footprint than first designed, for a reason that turned out to be the most
+interesting lesson of the scenario.
+
+Terraform builds the hosts; Ansible configures the **web host only**
+(`scenarios/03-lateral-move/ansible/playbook.yml`, run by `scripts/configure.sh`)
+— it plants the leaked pivot key there. The **internal host configures itself at
+boot via Terraform `user_data`**: it authorizes the pivot key and stages the
+decoy, so nothing ever SSHes *into* B to set it up. The pivot key pair is
+generated at plan time with the `tls` provider precisely so B can authorize it at
+boot.
+
+Why not have Ansible configure B too, by hopping through A (the obvious bastion
+pattern)? Because **VPC Flow Logs record only the 5-tuple — source/dest IP, port,
+protocol, ACCEPT/REJECT — not the SSH key or the user.** If Ansible configured B
+by SSHing through A, that setup traffic would be an `A→B:22` flow *identical* to
+the attack's, and the detection could not tell them apart. Configuring B without
+any inbound SSH means the only `A→B:22` flow that can ever exist is the attack.
+This is a real detection-engineering principle — keep management traffic off the
+paths you want to alert on — and it is *why*, in production, administration of a
+data tier should not run through the web tier (see Remediation: SSM Session
+Manager). The cost is that Ansible's role here shrinks to one host; that honest
+tradeoff was taken in favour of an unambiguous detection.
 
 ### Attack automation workflow
 
@@ -421,13 +433,16 @@ private IP, and `dstPort` is 22. The web tier opening SSH to the data tier is th
 lateral-movement signature; the query names the specific A→B:22 flow rather than
 matching "any port 22 traffic."
 
-**Pending empirical verification (not yet run):** the exact Flow Logs field names
-as exposed in Logs Insights (`srcAddr`/`dstAddr`/`dstPort`/`action`), the A→B SSH
-ProxyJump/pivot mechanics, and the delivery timing (VPC Flow Logs have their own
-lag plus the `max_aggregation_interval`, set to 60s here). These will be
-confirmed on first real deploy, exactly as Scenario 01's `ListObjects`-vs-
-`ListBucket` surprise and Scenario 02's no-activation-gap finding were confirmed
-rather than assumed.
+**Verified (2026-09-08):** the attack produced `ACCEPT`ed
+`10.77.1.203 (web) → 10.77.2.83 (internal) : 22` flows, delivered to CloudWatch
+Logs ~1-2 minutes after the attack. The Logs Insights field names
+(`srcAddr`/`dstAddr`/`dstPort`/`action`) are confirmed. A signal-cleanliness
+check (`stats count(*) by srcAddr` for all `dstAddr=B, dstPort=22` traffic)
+returned the **web host as the only source** — no configuration or other traffic,
+confirming that the `user_data` config choice made the signal unambiguous. This
+is the payoff of the design decision above, and it was verified rather than
+assumed, consistent with Scenario 01's `ListObjects`-vs-`ListBucket` finding and
+Scenario 02's no-activation-gap finding.
 
 ### Deploy-user permissions required
 
@@ -447,6 +462,14 @@ Scenario 02 rides along in the same version.
   tiers — prefer SSH agent forwarding or short-lived certificates.
 - Segment tiers so a web-tier compromise cannot administratively reach the data
   tier (tight per-SG rules, separate subnets, restrictive NACLs).
+- **Administer private hosts with AWS SSM Session Manager, not standing SSH.**
+  Session Manager gives an IAM-gated, fully-audited (CloudTrail) shell over an
+  *outbound* connection from the instance's SSM agent — so there is no inbound
+  port 22 to leave open by accident, and no bastion to compromise. In a private
+  subnet it needs SSM VPC interface endpoints (a small added cost). This is the
+  scalable answer to "how do I manage the internal host over time without
+  re-opening the exact hole this scenario is about," and a natural enhancement to
+  the lab (which currently simulates the older bastion model).
 
 ### Teardown
 

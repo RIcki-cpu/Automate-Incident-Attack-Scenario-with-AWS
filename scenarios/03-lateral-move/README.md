@@ -1,6 +1,6 @@
 # Scenario 03 — EC2 Lateral Movement
 
-**Status:** 🚧 skeleton (Terraform `validate`-clean; Ansible + attack/detect scripts written but not yet run against real infra — see [`manifest.yaml`](manifest.yaml) `status`)
+**Status:** ✅ verified end-to-end (deployed, attacked, detected, torn down clean — see [`manifest.yaml`](manifest.yaml) `status`)
 
 ## Architecture
 
@@ -34,11 +34,11 @@ reach B on the app port (8080, the solid line).
 
 ## What this deploys
 
-A two-tier VPC: a public **web host** (instance A, internet-reachable on SSH from your IP) and a private **internal host** (instance B, no public IP, think a data/service tier). **Ansible** configures both into the scenario state — this is the first scenario that needs configuration management (scenarios 1 and 2 didn't). See [`manifest.yaml`](manifest.yaml) for the full spec.
+A two-tier VPC: a public **web host** (instance A, internet-reachable on SSH from your IP) and a private **internal host** (instance B, no public IP, think a data/service tier). **Ansible** configures the web host (this is the first scenario to use it); the internal host configures itself at boot via Terraform `user_data` — deliberately, so nothing ever SSHes into B to set it up (see Detect for why that matters). See [`manifest.yaml`](manifest.yaml) for the full spec.
 
 **The vulnerability is a single security-group gap:** B's security group is meant to accept only the application port (8080) from the web tier, but it also allows **SSH (22) from the web tier's SG**. That one extra rule lets an attacker who lands on A open a shell on B — crossing a tier boundary that should never be crossable administratively.
 
-To make the pivot runnable, Ansible also stages a **reused/leaked SSH key** on A (a very common real mistake — keys left on jump hosts) and a decoy `db_credentials.txt` "prize" on B. The key/decoy are the *means*; the SG gap is the *vulnerability*, and the detection targets the network consequence of it.
+To make the pivot runnable, Ansible stages a **leaked SSH key** on A (a very common real mistake — a reusable private key left on a jump host), and B authorizes that key + stages a decoy `db_credentials.txt` "prize" via its boot `user_data`. The key/decoy are the *means*; the SG gap is the *vulnerability*, and the detection targets the network consequence of it.
 
 ## Prerequisite: IAM policy update required
 
@@ -62,7 +62,7 @@ Defaults assume your SSH public key is `~/.ssh/id_ed25519.pub` — override `pub
 scripts/configure.sh
 ```
 
-Generates the pivot key pair (gitignored `ansible/keys/`), builds the inventory from `terraform output`, and runs the playbook. The private host is reached by hopping through the public one (SSH ProxyCommand), since it has no public IP. Uses the project venv's `ansible-playbook`.
+Pulls the leaked pivot private key from `terraform output` into the gitignored `ansible/keys/`, builds a one-host inventory, and runs the playbook to plant that key on the web host. It does **not** touch the internal host (B configured itself via `user_data`) — that's the point. Uses the project venv's `ansible-playbook`.
 
 ## Attack
 
@@ -78,13 +78,18 @@ Lands on A, finds the leaked pivot key, and SSHes A→B to read the decoy prize 
 scripts/detect.sh
 ```
 
-Queries VPC Flow Logs in CloudWatch Logs (via **Logs Insights**, not jq-over-S3 — Flow Logs live in CloudWatch Logs) for an ACCEPTED flow from the web host's private IP to the internal host's private IP on port 22. The web tier opening SSH to the data tier is the signature. Flow Logs lag a few minutes before appearing.
+Queries VPC Flow Logs in CloudWatch Logs (via **Logs Insights**, not jq-over-S3 — Flow Logs live in CloudWatch Logs) for an ACCEPTED flow from the web host's private IP to the internal host's private IP on port 22. The web tier opening SSH to the data tier is the signature.
+
+**Why this signal is clean:** because B is configured entirely by `user_data` and nothing legitimate ever SSHes into it, *any* `A→B:22` flow is the attack. If instead we had configured B by SSHing through A (a bastion/ProxyJump), that setup traffic would be indistinguishable from the attack — VPC Flow Logs record only IPs/ports/action, not the SSH key or user. That's a real detection-engineering lesson: keep management traffic off the paths you want to alert on.
+
+**Verified (2026-09-08):** the attack produced ACCEPTED `10.77.1.203 → 10.77.2.83 : 22` flows, delivered to CloudWatch Logs ~1-2 min after the attack. A signal-cleanliness check confirmed the web host was the *only* source that ever reached B on port 22 — no configuration or other traffic muddied it.
 
 ## Remediate
 
 - Remove the SSH rule from the internal host's SG — the web tier should reach it only on the intended app port.
 - Never leave private keys on bastion/jump hosts, and never reuse one key across tiers; prefer agent forwarding or short-lived certificates.
 - Segment tiers so a web-tier compromise can't administratively reach the data tier.
+- **Manage private hosts with AWS SSM Session Manager, not standing SSH.** The right long-term answer to "how do I administer B without a bastion or an open port 22" is Session Manager: the instance dials *out* to SSM, so there is **no inbound port 22 to leave open by accident**, access is gated by IAM, and every session is logged in CloudTrail. It needs SSM VPC interface endpoints for a private subnet (a small added cost) — a worthwhile enhancement to this scenario, and the pattern a real environment should use instead of the bastion this lab simulates.
 
 ## Teardown
 

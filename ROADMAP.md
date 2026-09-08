@@ -17,7 +17,7 @@ Start date: **2026-08-21**. Target ship date: **2026-09-11** (3 weeks).
 
 - [x] Day 1-2: Scenario 2 DONE end-to-end — IAM privesc via blanket `sts:AssumeRole` + a role trusting account `:root`; attack + CloudTrail AssumeRole detection verified, torn down clean. (No Ansible — Scenario 2 is pure identity-layer; Ansible arrives in Scenario 3.)
 - [ ] Day 3 (still pending): refactor shared Terraform into modules (VPC, logging) now that real duplication exists across scenarios — deferred alongside the state-backend/CI work below.
-- [x] Day 4-5: Scenario 3 SKELETON built — two-tier VPC (public web host + private internal host), security-group gap (internal SG allows SSH from the web SG), Ansible configures both hosts (first use of Ansible in the kit), attack.sh does the A→B pivot, detect.sh queries VPC Flow Logs via CloudWatch Logs Insights. Terraform `validate`-clean. Blocked on the bundled IAM policy re-attach + first real deploy to verify runtime (SSH pivot, Flow Logs fields).
+- [x] Day 4-5: Scenario 3 DONE end-to-end — two-tier VPC (public web host + private internal host), security-group gap (internal SG allows SSH from the web SG), Ansible configures the web host (first use of Ansible; the internal host self-configures via user_data so the A→B:22 flow is unambiguously the attack), attack.sh does the A→B pivot, detect.sh queries VPC Flow Logs via CloudWatch Logs Insights. Deployed, attacked, detected (verified: web host was the only source reaching B on 22), torn down clean.
 - [ ] STILL PENDING (Week 2 leftovers, deliberately deferred to keep scenario momentum): migrate state to an S3 + DynamoDB backend; add `terraform validate` + `tflint` in GitHub Actions CI.
 
 ## Week 3 — Polish + Ship

@@ -28,14 +28,19 @@ scenario:
       fields @timestamp, srcAddr, dstAddr, dstPort, action
       | filter srcAddr = "<web_private_ip>" and dstAddr = "<internal_private_ip>" and dstPort = 22 and action = "ACCEPT"
       | sort @timestamp desc
+    verified_findings:
+      - "ACCEPTED flow 10.77.1.203 (web) -> 10.77.2.83 (internal) : 22, delivered to CloudWatch Logs ~1-2 min after the attack"
+      - "Signal-cleanliness check confirmed the web host was the ONLY source that ever reached B on port 22 — no config/other traffic (because B self-configures via user_data, nothing legitimately SSHes into it)"
+      - "CONFIRMED Logs Insights field names: srcAddr, dstAddr, dstPort, action"
     caveats:
-      - "UNVERIFIED until first real run: exact Flow Logs field names in Logs Insights (srcAddr/dstAddr/dstPort/action) and the A->B SSH ProxyJump/pivot mechanics need confirming on deploy, same discipline as scenarios 1/2"
-      - "VPC Flow Logs have their own delivery lag (a few minutes) plus the trail's max_aggregation_interval (set to 60s here) before a flow appears"
+      - "The clean signal depends on B being configured WITHOUT SSH (user_data). Flow Logs see only IPs/ports/action — not the key or user — so bastion-through-A config traffic would be indistinguishable from the attack"
+      - "VPC Flow Logs delivery lag (~1-2 min here) plus max_aggregation_interval (60s) before a flow appears"
       - "Detection matches the specific A->B:22 flow, not 'any port 22 traffic' — the point is the web tier reaching the data tier over SSH"
   remediation:
     - "Remove the SSH (22) rule from the internal host's security group — the web tier should reach it only on the intended app port"
     - "Do not leave private keys on bastion/jump hosts; use SSH agent forwarding or per-host short-lived certs, and never reuse one key across tiers"
     - "Segment tiers so a web-tier compromise cannot reach the data tier administratively (separate SGs, least-privilege rules, ideally separate subnets with tight NACLs)"
+    - "Manage private hosts via AWS SSM Session Manager, not standing SSH: no inbound port 22 to leave open, IAM-gated, fully audited in CloudTrail (needs SSM VPC endpoints in a private subnet)"
   teardown: "terraform destroy"
 
-status: skeleton # planned -> skeleton -> deployed -> attacked -> detected -> torn_down
+status: torn_down # planned -> skeleton -> deployed -> attacked -> detected -> torn_down

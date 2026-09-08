@@ -1,22 +1,22 @@
 ---
-# Configures the two hosts into the scenario's vulnerable-but-runnable
-# state. This is the step that finally uses Ansible (scenarios 1 and 2
-# needed no host configuration; this one does). Run it via
-# scripts/configure.sh, which generates the inventory from terraform
-# output and reaches the private host through the public one (ProxyJump).
+# Configures the WEB host (A) only. This is where Ansible earns its (here
+# modest) place: it plants the leaked pivot private key on the bastion,
+# modelling the very common mistake of leaving a reusable private key on a
+# jump host.
 #
-# What it sets up:
-#   web (A):      leaves a "pivot" private key on disk — the deliberately
-#                 leaked credential an attacker finds on a bastion and
-#                 reuses. (Key reuse / keys left on jump hosts is an
-#                 extremely common real mistake.)
-#   internal (B): authorizes that pivot key for ec2-user, and stages a
-#                 decoy "database credentials" file as the prize that
-#                 proves the pivot succeeded.
+# The INTERNAL host (B) is NOT configured here — it sets itself up at boot
+# via Terraform user_data (authorizes the pivot key + stages the decoy).
+# That is deliberate: nothing ever SSHes into B to configure it, so the only
+# web->internal SSH flow VPC Flow Logs ever record is the attack. If Ansible
+# reached B by hopping through A, that setup traffic would be
+# indistinguishable from the attack in the flow logs.
 #
-# The pivot key pair itself is generated locally by configure.sh (into a
-# gitignored keys/ dir) and passed in as pivot_public_key / the private
-# key is copied to A.
+# The pivot private key comes from `terraform output` — scripts/configure.sh
+# writes it to the gitignored keys/ dir before running this playbook.
+#
+# (For a real, scalable way to manage a private host like B without a
+# standing SSH hole, see the SSM Session Manager note in the scenario README
+# / docs/technical-design.md — that's the best-practice management path.)
 
 - name: Configure the web (bastion) host
   hosts: web
@@ -39,37 +39,3 @@
         owner: ec2-user
         group: ec2-user
         mode: "0600"
-
-- name: Configure the internal host
-  hosts: internal
-  become: true
-  vars:
-    pivot_public_key: "{{ lookup('file', playbook_dir + '/keys/pivot_key.pub') }}"
-  tasks:
-    - name: Authorize the pivot key for ec2-user (so the leaked key from A works here)
-      ansible.posix.authorized_key:
-        user: ec2-user
-        key: "{{ pivot_public_key }}"
-        state: present
-
-    - name: Create the decoy app directory
-      ansible.builtin.file:
-        path: /opt/app
-        state: directory
-        mode: "0755"
-
-    - name: Stage the decoy "database credentials" (the prize — fake data only)
-      ansible.builtin.copy:
-        dest: /opt/app/db_credentials.txt
-        # Owned by ec2-user (the identity the pivot key lands as), so reading
-        # it is pure lateral movement — no privilege escalation needed on B.
-        # (Left as root:root it would be unreadable to the pivoted user, which
-        # would turn this into a privesc scenario — that's Scenario 02's job.)
-        owner: ec2-user
-        group: ec2-user
-        mode: "0600"
-        content: |
-          # INTERNAL - do not distribute (DECOY DATA - lab only)
-          DB_HOST=internal-db.lateral-move.local
-          DB_USER=svc_ecommerce
-          DB_PASS=not-a-real-password-decoy-1234
