@@ -61,10 +61,12 @@ resource "aws_iam_role_policy" "flow_logs" {
 # The Flow Log itself: capture ALL traffic (accepted and rejected) across
 # the whole VPC, delivered to the log group via the role above.
 resource "aws_flow_log" "vpc" {
-  vpc_id                   = aws_vpc.this.id
-  traffic_type             = "ALL"
-  log_destination_type     = "cloud-watch-logs"
-  log_group_name           = aws_cloudwatch_log_group.flow.name
+  vpc_id               = aws_vpc.this.id
+  traffic_type         = "ALL"
+  log_destination_type = "cloud-watch-logs"
+  # For a cloud-watch-logs destination, `log_destination` must be the log
+  # group's ARN (not its name) — using .name here fails at apply.
+  log_destination          = aws_cloudwatch_log_group.flow.arn
   iam_role_arn             = aws_iam_role.flow_logs.arn
   max_aggregation_interval = 60 # smallest window (1 min) so the attack shows up fast
 

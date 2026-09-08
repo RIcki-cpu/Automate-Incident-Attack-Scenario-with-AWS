@@ -33,6 +33,11 @@ variable "instance_type" {
 variable "allowed_ssh_cidr" {
   description = "CIDR allowed to SSH into the public web host (the operator's foothold). Set to YOUR_IP/32 — find it with: curl -s ifconfig.me"
   type        = string
+
+  validation {
+    condition     = can(cidrhost(var.allowed_ssh_cidr, 0))
+    error_message = "Please enter a valid IPv4 address or CIDR block, e.g. 203.0.113.10/32."
+  }
 }
 
 # The public half of an SSH key pair you already have. Terraform uploads

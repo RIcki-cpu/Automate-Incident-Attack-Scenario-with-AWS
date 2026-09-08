@@ -2,6 +2,36 @@
 
 **Status:** 🚧 skeleton (Terraform `validate`-clean; Ansible + attack/detect scripts written but not yet run against real infra — see [`manifest.yaml`](manifest.yaml) `status`)
 
+## Architecture
+
+```mermaid
+flowchart LR
+    op["Operator / Attacker"]
+
+    subgraph vpc["VPC 10.77.0.0/16"]
+        igw["Internet Gateway"]
+        subgraph pub["Public subnet 10.77.1.0/24"]
+            A["Web host A<br/>public IP<br/>web-sg"]
+        end
+        subgraph priv["Private subnet 10.77.2.0/24<br/>no internet route"]
+            B["Internal host B<br/>private IP only<br/>internal-sg"]
+        end
+        fl["VPC Flow Logs"]
+    end
+
+    cw["CloudWatch Logs<br/>+ Logs Insights"]
+
+    op -->|"SSH 22 (foothold)"| igw --> A
+    A ==>|"8080 intended app path (OK)"| B
+    A -.->|"SSH 22 = the lateral pivot (should never happen)"| B
+    fl -->|"delivers flow records"| cw
+    cw -.->|"detect.sh finds A→B:22"| op
+```
+
+The dotted red-intent line (A→B on SSH/22) is the whole vulnerability: the
+internal host's security group allows it, when the web tier should only ever
+reach B on the app port (8080, the solid line).
+
 ## What this deploys
 
 A two-tier VPC: a public **web host** (instance A, internet-reachable on SSH from your IP) and a private **internal host** (instance B, no public IP, think a data/service tier). **Ansible** configures both into the scenario state — this is the first scenario that needs configuration management (scenarios 1 and 2 didn't). See [`manifest.yaml`](manifest.yaml) for the full spec.

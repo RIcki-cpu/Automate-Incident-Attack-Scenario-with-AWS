@@ -61,6 +61,12 @@
     - name: Stage the decoy "database credentials" (the prize — fake data only)
       ansible.builtin.copy:
         dest: /opt/app/db_credentials.txt
+        # Owned by ec2-user (the identity the pivot key lands as), so reading
+        # it is pure lateral movement — no privilege escalation needed on B.
+        # (Left as root:root it would be unreadable to the pivoted user, which
+        # would turn this into a privesc scenario — that's Scenario 02's job.)
+        owner: ec2-user
+        group: ec2-user
         mode: "0600"
         content: |
           # INTERNAL - do not distribute (DECOY DATA - lab only)
